@@ -94,3 +94,7 @@ demo/
 demo*.ipynb
 .DS_STORE
 
+# uv
+uv.lock
+
+**/results/**
