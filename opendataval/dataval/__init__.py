@@ -38,6 +38,7 @@ Catalog
     Sampler
     TMCSampler
     GrTMCSampler
+    TimInfluence
 """
 
 from opendataval.dataval.ame import AME
@@ -61,4 +62,5 @@ from opendataval.dataval.margcontrib import (
 )
 from opendataval.dataval.oob import DataOob
 from opendataval.dataval.random import RandomEvaluator
+from opendataval.dataval.tim import TimInfluence
 from opendataval.dataval.volume import RobustVolumeShapley
