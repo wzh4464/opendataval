@@ -51,28 +51,58 @@ def test_basic_functionality():
         print(f"   评估器类型: {type(tim_evaluator)}")
         
         print("\n📊 测试TIM数据输入...")
-        # 测试数据输入（使用实际的数据格式转换）
-        from opendataval.dataloader.util import ListDataset
+        # 测试tokenization和数据转换
+        print("   🔄 对文本数据进行tokenization...")
         
-        if isinstance(x_train, list):
-            x_train_dataset = ListDataset(x_train)
-            x_valid_dataset = ListDataset(x_valid)
-        else:
-            x_train_dataset = x_train
-            x_valid_dataset = x_valid
-            
+        train_dataset = model.tokenize(x_train)
+        valid_dataset = model.tokenize(x_valid)
+        
+        # 获取tokenized的tensor数据
+        train_input_ids = train_dataset.tensors[0]
+        train_attention_mask = train_dataset.tensors[1]  
+        valid_input_ids = valid_dataset.tensors[0]
+        valid_attention_mask = valid_dataset.tensors[1]
+        
+        print(f"   Tokenized数据形状: {train_input_ids.shape}")
+        
+        # 为TIM创建tensor输入
         tim_evaluator.input_data(
-            x_train=x_train_dataset,
+            x_train=train_input_ids,
             y_train=y_train,
-            x_valid=x_valid_dataset, 
+            x_valid=valid_input_ids,
             y_valid=y_valid
         )
         print("✅ TIM数据输入成功")
         print(f"   TIM训练样本数: {tim_evaluator.num_points}")
         
-        # 设置模型
-        tim_evaluator.pred_model = model
-        print("✅ TIM模型设置成功")
+        # 创建BERT包装器
+        import torch
+        class BertTimWrapper(torch.nn.Module):
+            def __init__(self, bert_model, attention_mask):
+                super().__init__()
+                self.bert_model = bert_model
+                self.attention_mask = attention_mask
+                
+            def forward(self, input_ids):
+                batch_size = input_ids.shape[0]
+                mask = self.attention_mask[:batch_size]
+                return self.bert_model(input_ids, attention_mask=mask)
+                
+            def predict(self, input_ids):
+                return self.forward(input_ids)
+                
+            def parameters(self):
+                return self.bert_model.parameters()
+                
+            def named_parameters(self):
+                return self.bert_model.named_parameters()
+                
+            def zero_grad(self):
+                return self.bert_model.zero_grad()
+        
+        bert_wrapper = BertTimWrapper(model, train_attention_mask)
+        tim_evaluator.pred_model = bert_wrapper
+        print("✅ TIM BERT包装器设置成功")
         
         return True
         

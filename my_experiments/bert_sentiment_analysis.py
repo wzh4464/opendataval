@@ -129,13 +129,22 @@ class BertTimExperiment:
         else:
             x_train_data, x_valid_data, x_test_data = x_train, x_valid, x_test
             
-        # 确保标签是torch tensor格式
+        # 确保标签是torch tensor格式，并转换one-hot为索引
         if not isinstance(y_train, torch.Tensor):
             y_train = torch.tensor(y_train, dtype=torch.long)
         if not isinstance(y_valid, torch.Tensor):
             y_valid = torch.tensor(y_valid, dtype=torch.long)
         if not isinstance(y_test, torch.Tensor):
             y_test = torch.tensor(y_test, dtype=torch.long)
+            
+        # 如果是one-hot编码，转换为索引格式
+        if len(y_train.shape) > 1 and y_train.shape[1] > 1:
+            y_train = torch.argmax(y_train, dim=1)
+            print(f"   转换one-hot标签为索引: {y_train[:5]}")
+        if len(y_valid.shape) > 1 and y_valid.shape[1] > 1:
+            y_valid = torch.argmax(y_valid, dim=1)
+        if len(y_test.shape) > 1 and y_test.shape[1] > 1:
+            y_test = torch.argmax(y_test, dim=1)
 
         print("✅ 数据加载完成")
         print(f"   训练集样本数: {len(x_train_data)}")
@@ -157,18 +166,12 @@ class BertTimExperiment:
             num_train_layers=2,  # 微调最后2层
         )
 
-        # 如果GPU可用，将模型移到GPU
-        device = torch.device(
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
-        )
+        # 暂时使用CPU避免设备问题
+        device = torch.device("cpu")
         model = model.to(device)
 
         print(f"🤖 创建模型: {model_config['description']}")
-        print(f"📍 设备: {device}")
+        print(f"📍 设备: {device} (强制CPU以避免设备问题)")
 
         return model
 
@@ -233,27 +236,92 @@ class BertTimExperiment:
             # 2. 设置TIM评估器
             tim_evaluator = self.setup_tim_evaluator(**tim_config)
 
-            # 3. 输入数据到TIM - 需要转换为适当格式
-            # TIM期望的数据格式与BERT不同，需要特殊处理
-            from opendataval.dataloader.util import ListDataset
+            # 3. 输入数据到TIM - 需要转换为tensor格式
+            # TIM内部需要tensor数据，但我们有文本数据，需要先tokenize
+            print("   🔄 对文本数据进行tokenization...")
             
-            # 将列表数据转换为Dataset格式
-            if isinstance(x_train, list):
-                x_train_dataset = ListDataset(x_train)
-                x_valid_dataset = ListDataset(x_valid)
-            else:
-                x_train_dataset = x_train
-                x_valid_dataset = x_valid
+            # 使用模型的tokenizer处理文本数据
+            train_dataset = model.tokenize(x_train)
+            valid_dataset = model.tokenize(x_valid)
             
+            # 获取tokenized的tensor数据
+            train_input_ids = train_dataset.tensors[0]
+            train_attention_mask = train_dataset.tensors[1]  
+            valid_input_ids = valid_dataset.tensors[0]
+            valid_attention_mask = valid_dataset.tensors[1]
+            
+            # 为TIM创建简化的tensor输入（转换为float以支持梯度计算）
             tim_evaluator.input_data(
-                x_train=x_train_dataset, 
-                y_train=y_train, 
-                x_valid=x_valid_dataset, 
+                x_train=train_input_ids.float(),
+                y_train=y_train,
+                x_valid=valid_input_ids.float(),
                 y_valid=y_valid
             )
 
-            # 4. 设置预测模型
-            tim_evaluator.pred_model = model
+            # 4. 创建TIM兼容的BERT包装器
+            class BertTimWrapper(torch.nn.Module):
+                """包装BERT模型以兼容TIM的tensor输入格式"""
+                def __init__(self, bert_model, attention_mask):
+                    super().__init__()
+                    self.bert_model = bert_model
+                    self.attention_mask = attention_mask.detach()  # 避免梯度问题
+                    
+                def forward(self, input_ids):
+                    # TIM传递的是float tensor，我们需要转换为token IDs
+                    batch_size = input_ids.shape[0]
+                    device = input_ids.device
+                    
+                    # 使用对应的attention mask片段  
+                    mask = self.attention_mask[:batch_size].to(device)
+                    
+                    # 将float tensor转为long token IDs
+                    input_ids_long = input_ids.long()
+                    
+                    # 调用BERT并获取logits（不要softmax）
+                    outputs = self.bert_model(input_ids_long, attention_mask=mask)
+                    
+                    # 移除最后的Softmax层，直接返回logits以便梯度传播
+                    # BERT classifier的最后一层是softmax，我们需要raw logits
+                    if hasattr(self.bert_model, 'classifier'):
+                        # 获取分类器之前的hidden states
+                        hidden_states = self.bert_model.bert(input_ids_long, attention_mask=mask)[0]
+                        pooled_output = hidden_states[:, 0]  # [CLS] token
+                        
+                        # 只通过linear层，不要softmax
+                        pre_linear = self.bert_model.classifier.pre_linear(pooled_output)
+                        activated = self.bert_model.classifier.acti(pre_linear)
+                        dropped = self.bert_model.classifier.dropout(activated)
+                        logits = self.bert_model.classifier.linear(dropped)
+                        
+                        return logits  # 返回raw logits而不是softmax输出
+                    else:
+                        return outputs
+                    
+                def predict(self, input_ids):
+                    """TIM调用的预测接口"""
+                    with torch.enable_grad():
+                        return self.forward(input_ids)
+                    
+                def parameters(self):
+                    return self.bert_model.parameters()
+                    
+                def named_parameters(self):
+                    return self.bert_model.named_parameters()
+                    
+                def zero_grad(self):
+                    return self.bert_model.zero_grad()
+                    
+                def train(self):
+                    self.bert_model.train()
+                    return self
+                    
+                def eval(self):
+                    self.bert_model.eval() 
+                    return self
+            
+            # 创建包装器
+            bert_wrapper = BertTimWrapper(model, train_attention_mask)
+            tim_evaluator.pred_model = bert_wrapper
 
             # 5. 训练并记录状态
             print("\n🚀 开始TIM训练...")
