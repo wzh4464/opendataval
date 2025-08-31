@@ -1,465 +1,507 @@
-#!/usr/bin/env python3
 """
-统一的BERT情感分析和数据估值实验 (含TIM方法)
-支持多种设备（CPU/CUDA/MPS），命令行参数配置
-使用预训练DistilBERT模型进行微调，包含新的TIM方法
+BERT情感分析实验 - 使用OpenDataVal TIM方法
+
+使用Time-varying Influence Measurement (TIM)进行BERT情感分析微调的数据价值评估实验。
+本实验设置 t1 = 0, t2 = T（完整训练过程），使用不同大小的BERT模型进行比较。
+
+实验配置：
+- 数据集: IMDB电影评论情感分析数据集
+- 模型: 多种BERT模型大小选项（从DistilBERT到BERT-Large）
+- 评估方法: TIM (Time-varying Influence Measurement)
+- 时间窗口: [0, T] - 完整训练过程
 """
 
-import argparse
-import json
-import os
-import sys
-from datetime import datetime
-from typing import List
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
 
-# 添加项目根目录到Python路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from opendataval.dataval import (
-    AME,
-    DataOob,
-    InfluenceFunction,
-    RandomEvaluator,
-    TimInfluence,
-)
-from opendataval.experiment import ExperimentMediator
+from opendataval.dataloader import DataFetcher
+from opendataval.dataval.tim import TimInfluence
+from opendataval.model import BertClassifier
 
 
-def get_device_config(device: str = "auto") -> dict:
-    """获取设备相关配置"""
-    if device == "auto":
-        if torch.backends.mps.is_available():
-            device = "mps"
-        elif torch.cuda.is_available():
-            device = "cuda"
-        else:
-            device = "cpu"
-    
-    # 设备特定优化
-    if device == "mps":
-        # Apple Silicon MPS优化
-        os.environ['PYTORCH_MPS_HIGH_WATERMARK_RATIO'] = '0.0'
-        os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
-        torch.set_num_threads(8)
-        os.environ['CUDA_VISIBLE_DEVICES'] = ''
-        print("🍎 Apple Silicon MPS优化已启用")
-        
-    elif device == "cuda":
-        # CUDA优化
-        torch.backends.cudnn.benchmark = True
-        print(f"🚀 CUDA优化已启用 (设备数量: {torch.cuda.device_count()})")
-        
-    else:
-        # CPU优化
-        torch.set_num_threads(os.cpu_count() or 4)
-        print("💻 CPU模式已启用")
-    
-    return {"device": device}
+def get_bert_model_configs() -> Dict[str, Dict]:
+    """获取不同大小的BERT模型配置
 
+    返回从小到大的BERT模型配置列表，包括参数规模信息。
 
-def get_experiment_config(args) -> dict:
-    """根据参数获取实验配置"""
-    
-    # 根据设备调整默认配置
-    if args.device == "mps":
-        default_batch_size = 8
-        default_num_models = 15
-        default_epochs = 3
-    elif args.device == "cuda":
-        default_batch_size = 16
-        default_num_models = 25
-        default_epochs = 3
-    else:
-        default_batch_size = 4
-        default_num_models = 10
-        default_epochs = 2
-    
-    config = {
-        'dataset_name': args.dataset,
-        'train_count': args.train_samples,
-        'valid_count': args.valid_samples,
-        'test_count': args.test_samples,
-        'model_name': 'BertClassifier',
-        'train_kwargs': {
-            'epochs': args.epochs or default_epochs,
-            'batch_size': args.batch_size or default_batch_size,
-            'lr': args.learning_rate,
+    Returns:
+        Dict[str, Dict]: 模型配置字典，键为模型名称，值为配置参数
+    """
+    return {
+        # 小型模型 (适合快速实验)
+        "distilbert-base-uncased": {
+            "pretrained_model_name": "distilbert-base-uncased",
+            "parameters": "66M",
+            "description": "DistilBERT-Base (66M参数) - BERT的轻量级版本，速度快",
         },
-        'evaluator_config': {
-            'num_models': args.num_models or default_num_models,
+        # 标准BERT模型
+        "bert-base-uncased": {
+            "pretrained_model_name": "bert-base-uncased",
+            "parameters": "110M",
+            "description": "BERT-Base (110M参数) - 原始BERT基础版本",
         },
-        'device': args.device,
-        'tim_config': {
-            'num_epochs': args.tim_epochs,
-            'regularization': args.tim_reg,
-            'window_type': args.tim_window_type,
-            'start_step': args.tim_start_step,
-            'end_step': args.tim_end_step,
-        }
+        "bert-base-cased": {
+            "pretrained_model_name": "bert-base-cased",
+            "parameters": "110M",
+            "description": "BERT-Base-Cased (110M参数) - 区分大小写版本",
+        },
+        # 大型模型 (推荐用于最佳性能)
+        "bert-large-uncased": {
+            "pretrained_model_name": "bert-large-uncased",
+            "parameters": "340M",
+            "description": "BERT-Large (340M参数) - 最大的标准BERT模型，性能最佳",
+        },
+        "bert-large-cased": {
+            "pretrained_model_name": "bert-large-cased",
+            "parameters": "340M",
+            "description": "BERT-Large-Cased (340M参数) - 大型区分大小写版本",
+        },
+        # RoBERTa变体 (通常性能更好)
+        "roberta-base": {
+            "pretrained_model_name": "roberta-base",
+            "parameters": "125M",
+            "description": "RoBERTa-Base (125M参数) - BERT的改进版本",
+        },
+        "roberta-large": {
+            "pretrained_model_name": "roberta-large",
+            "parameters": "355M",
+            "description": "RoBERTa-Large (355M参数) - 大型RoBERTa模型，通常性能最佳",
+        },
     }
-    
-    return config
 
 
-def create_evaluators(config: dict, methods: List[str]) -> List:
-    """创建数据估值方法评估器，包括TIM"""
-    evaluators = []
-    num_models = config['evaluator_config']['num_models']
-    
-    for method in methods:
-        if method == "random":
-            evaluators.append(RandomEvaluator())
-        elif method == "dataoob":
-            evaluators.append(DataOob(num_models=num_models))
-        elif method == "ame":
-            evaluators.append(AME(num_models=num_models))
-        elif method == "influence":
-            # 影响函数在某些设备上可能不稳定
-            if config['device'] != 'mps':
-                evaluators.append(InfluenceFunction())
-            else:
-                print("⚠️ 跳过影响函数方法（MPS设备不稳定）")
-        elif method == "tim":
-            # 新的TIM方法 - 支持任意时间区间
-            tim_kwargs = {
-                'time_window_type': config['tim_config']['window_type'],
-                'num_epochs': config['tim_config']['num_epochs'],
-                'regularization': config['tim_config']['regularization']
-            }
-            if config['tim_config']['start_step'] is not None:
-                tim_kwargs['start_step'] = config['tim_config']['start_step']
-            if config['tim_config']['end_step'] is not None:
-                tim_kwargs['end_step'] = config['tim_config']['end_step']
-                
-            evaluators.append(TimInfluence(**tim_kwargs))
-        else:
-            print(f"⚠️ 未知的评估方法: {method}")
-    
-    return evaluators
+class BertTimExperiment:
+    """BERT + TIM 情感分析实验类"""
 
+    def __init__(
+        self,
+        dataset_name: str = "imdb",
+        train_count: int = 1000,
+        valid_count: int = 200,
+        test_count: int = 200,
+        random_state: int = 42,
+        output_dir: str = "./results",
+    ):
+        """
+        初始化实验配置
 
-def run_experiment(args) -> dict:
-    """运行完整的BERT情感分析实验"""
-    
-    print("=" * 60)
-    print("🤖 BERT情感分析与数据估值实验 (含TIM方法)")
-    print(f"📅 实验时间: {datetime.now()}")
-    print("=" * 60)
-    
-    # 1. 设备配置
-    device_config = get_device_config(args.device)
-    actual_device = device_config['device']
-    
-    # 2. 实验配置
-    config = get_experiment_config(args)
-    config['device'] = actual_device  # 使用实际检测到的设备
-    
-    print("\n📋 实验配置:")
-    print(f"   🖥️  设备: {actual_device.upper()}")
-    print(f"   📚 数据集: {config['dataset_name']}")
-    print(f"   🏷️  模型: {config['model_name']} (微调DistilBERT)")
-    print(f"   🔢 训练样本: {config['train_count']}")
-    print(f"   📦 批次大小: {config['train_kwargs']['batch_size']}")
-    print(f"   🔄 训练轮次: {config['train_kwargs']['epochs']}")
-    print(f"   📈 学习率: {config['train_kwargs']['lr']}")
-    print(f"   🎯 评估方法: {', '.join(args.methods)}")
-    if "tim" in args.methods:
-        print(f"   ⏰ TIM回溯轮次: {config['tim_config']['num_epochs']}")
-        print(f"   🔧 TIM正则化: {config['tim_config']['regularization']}")
-    
-    # 3. 设置实验环境
-    print("\n🔧 设置实验环境...")
-    try:
-        exper_med = ExperimentMediator.model_factory_setup(
-            dataset_name=config['dataset_name'],
-            train_count=config['train_count'],
-            valid_count=config['valid_count'],
-            test_count=config['test_count'],
-            model_name=config['model_name'],
-            train_kwargs=config['train_kwargs'],
-            metric_name='accuracy',
-            device=actual_device,
+        Parameters:
+        -----------
+        dataset_name : str
+            数据集名称，默认"imdb"用于情感分析
+        train_count : int
+            训练样本数量
+        valid_count : int
+            验证样本数量
+        test_count : int
+            测试样本数量
+        random_state : int
+            随机种子
+        output_dir : str
+            结果输出目录
+        """
+        self.dataset_name = dataset_name
+        self.train_count = train_count
+        self.valid_count = valid_count
+        self.test_count = test_count
+        self.random_state = random_state
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 设置随机种子
+        torch.manual_seed(random_state)
+        np.random.seed(random_state)
+
+        # 实验结果存储
+        self.results = {}
+
+    def prepare_data(
+        self,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """准备IMDB情感分析数据"""
+        print(f"🔄 加载数据集: {self.dataset_name}")
+        print(
+            f"📊 数据规模: 训练={self.train_count}, 验证={self.valid_count}, 测试={self.test_count}"
         )
-        print("✅ 实验环境设置成功")
-        # 获取基线准确率（如果可用）
+
+        # 使用DataFetcher加载IMDB数据集
+        fetcher = DataFetcher(
+            dataset_name=self.dataset_name,
+            train_count=self.train_count,
+            valid_count=self.valid_count,
+            test_count=self.test_count,
+            random_state=self.random_state,
+        )
+
+        # 获取原始文本数据（不使用embedding）
+        x_train, y_train, x_valid, y_valid, x_test, y_test = fetcher.datapoints
+
+        print("✅ 数据加载完成")
+        print(f"   训练集样本数: {len(x_train)}")
+        print(f"   验证集样本数: {len(x_valid)}")
+        print(f"   测试集样本数: {len(x_test)}")
+        print(f"   类别数: {len(np.unique(y_train))}")
+
+        return x_train, y_train, x_valid, y_valid, x_test, y_test
+
+    def create_bert_model(self, model_config: Dict) -> BertClassifier:
+        """创建BERT分类器模型"""
+        model = BertClassifier(
+            pretrained_model_name=model_config["pretrained_model_name"],
+            num_classes=2,  # 二分类情感分析
+            dropout_rate=0.2,
+            num_train_layers=2,  # 微调最后2层
+        )
+
+        # 如果GPU可用，将模型移到GPU
+        device = torch.device(
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
+        model = model.to(device)
+
+        print(f"🤖 创建模型: {model_config['description']}")
+        print(f"📍 设备: {device}")
+
+        return model
+
+    def setup_tim_evaluator(
+        self, t1: int = 0, t2: int = None, num_epochs: int = 5, batch_size: int = 16
+    ) -> TimInfluence:
+        """
+        设置TIM评估器
+
+        Parameters:
+        -----------
+        t1 : int
+            时间窗口开始步骤，默认0（从开始）
+        t2 : int
+            时间窗口结束步骤，None表示到结束（T）
+        num_epochs : int
+            训练轮数
+        batch_size : int
+            批处理大小
+        """
+        print("⚙️  设置TIM评估器")
+        print(f"   时间窗口: t1={t1}, t2={'T(end)' if t2 is None else t2}")
+        print(f"   训练配置: epochs={num_epochs}, batch_size={batch_size}")
+
+        tim_evaluator = TimInfluence(
+            start_step=t1,
+            end_step=t2,
+            time_window_type="full" if t1 == 0 and t2 is None else "custom_range",
+            num_epochs=num_epochs,
+            batch_size=batch_size,
+            regularization=0.01,
+            finite_diff_eps=1e-5,
+            random_state=self.random_state,
+        )
+
+        return tim_evaluator
+
+    def run_single_experiment(
+        self, model_name: str, model_config: Dict, data: Tuple, tim_config: Dict = None
+    ) -> Dict:
+        """运行单个BERT+TIM实验"""
+        x_train, y_train, x_valid, y_valid, x_test, y_test = data
+
+        print("\n" + "=" * 60)
+        print(f"🔬 开始实验: {model_name}")
+        print(f"📝 {model_config['description']}")
+        print("=" * 60)
+
+        # 默认TIM配置
+        if tim_config is None:
+            tim_config = {
+                "t1": 0,
+                "t2": None,  # 到结束
+                "num_epochs": 3,
+                "batch_size": 8,  # BERT需要较小的batch size
+            }
+
         try:
-            baseline_accuracy = getattr(exper_med, 'model_metric', 0.0)
-        except:
-            baseline_accuracy = 0.0
-        print(f"📊 基线模型准确率: {baseline_accuracy:.4f}")
-        
-    except Exception as e:
-        print(f"❌ 实验环境设置失败: {e}")
-        return None
-    
-    # 4. 创建评估器
-    print("\n🧮 初始化数据估值方法...")
-    evaluators = create_evaluators(config, args.methods)
-    
-    if not evaluators:
-        print("❌ 没有有效的评估方法")
-        return None
-    
-    print(f"✅ 创建了 {len(evaluators)} 个评估器")
-    for evaluator in evaluators:
-        eval_name = type(evaluator).__name__
-        if eval_name == "TimInfluence":
-            print(f"   🆕 TIM (Time-varying Influence): {evaluator.num_epochs} epochs")
-        else:
-            print(f"   📊 {eval_name}")
-    
-    # 5. 计算数据估值
-    print("\n⏳ 开始计算数据估值...")
-    start_time = datetime.now()
-    
-    try:
-        eval_med = exper_med.compute_data_values(evaluators)
-        elapsed_time = datetime.now() - start_time
-        print(f"✅ 数据估值完成，总耗时: {elapsed_time}")
-        
-    except Exception as e:
-        print(f"❌ 数据估值失败: {e}")
-        return None
-    
-    # 6. 分析结果
-    print("\n📊 分析结果...")
-    results = {
-        'experiment_info': {
-            'timestamp': datetime.now().isoformat(),
-            'device': actual_device,
-            'baseline_accuracy': float(baseline_accuracy),
-            'elapsed_time': str(elapsed_time),
-            'tim_enabled': "tim" in args.methods,
-        },
-        'config': config,
-        'evaluators': {}
-    }
-    
-    # 保存数据估值结果
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_dir = "my_experiments/results"
-    os.makedirs(results_dir, exist_ok=True)
-    
-    for evaluator in eval_med.data_evaluators:
-        method_name = type(evaluator).__name__
-        data_values = evaluator.data_values
-        
-        # 统计信息
-        stats = {
-            'mean': float(data_values.mean()),
-            'std': float(data_values.std()),
-            'min': float(data_values.min()),
-            'max': float(data_values.max()),
-            'median': float(np.median(data_values)),
-            'shape': list(data_values.shape)
+            # 1. 创建模型
+            model = self.create_bert_model(model_config)
+
+            # 2. 设置TIM评估器
+            tim_evaluator = self.setup_tim_evaluator(**tim_config)
+
+            # 3. 输入数据到TIM
+            tim_evaluator.input_data(
+                x_train=x_train, y_train=y_train, x_valid=x_valid, y_valid=y_valid
+            )
+
+            # 4. 设置预测模型
+            tim_evaluator.pred_model = model
+
+            # 5. 训练并记录状态
+            print("\n🚀 开始TIM训练...")
+            tim_evaluator.train_data_values(
+                epochs=tim_config["num_epochs"],
+                batch_size=tim_config["batch_size"],
+                lr=2e-5,  # BERT推荐学习率
+            )
+
+            # 6. 计算影响力数据值
+            print("\n📊 计算数据影响力...")
+            data_values = tim_evaluator.evaluate_data_values()
+
+            # 7. 分析结果
+            results = self.analyze_results(
+                model_name=model_name,
+                data_values=data_values,
+                tim_evaluator=tim_evaluator,
+                y_train=y_train,
+            )
+
+            print(f"✅ 实验完成: {model_name}")
+            return results
+
+        except Exception as e:
+            print(f"❌ 实验失败: {model_name}")
+            print(f"   错误: {e!s}")
+            return {"model_name": model_name, "status": "failed", "error": str(e)}
+
+    def analyze_results(
+        self,
+        model_name: str,
+        data_values: np.ndarray,
+        tim_evaluator: TimInfluence,
+        y_train: torch.Tensor,
+    ) -> Dict:
+        """分析TIM实验结果"""
+
+        # 基础统计
+        mean_influence = float(np.mean(data_values))
+        std_influence = float(np.std(data_values))
+        min_influence = float(np.min(data_values))
+        max_influence = float(np.max(data_values))
+
+        # 按类别分析影响力
+        y_train_np = y_train.numpy() if isinstance(y_train, torch.Tensor) else y_train
+
+        positive_indices = np.where(y_train_np == 1)[0]
+        negative_indices = np.where(y_train_np == 0)[0]
+
+        positive_influence = data_values[positive_indices]
+        negative_influence = data_values[negative_indices]
+
+        # 找出最有影响力的样本
+        top_k = 10
+        most_influential_indices = np.argsort(data_values)[-top_k:][::-1]
+        least_influential_indices = np.argsort(data_values)[:top_k]
+
+        results = {
+            "model_name": model_name,
+            "status": "success",
+            "data_values": data_values.tolist(),
+            "statistics": {
+                "mean_influence": mean_influence,
+                "std_influence": std_influence,
+                "min_influence": min_influence,
+                "max_influence": max_influence,
+                "total_samples": len(data_values),
+            },
+            "class_analysis": {
+                "positive_samples": {
+                    "count": len(positive_influence),
+                    "mean_influence": float(np.mean(positive_influence)),
+                    "std_influence": float(np.std(positive_influence)),
+                },
+                "negative_samples": {
+                    "count": len(negative_influence),
+                    "mean_influence": float(np.mean(negative_influence)),
+                    "std_influence": float(np.std(negative_influence)),
+                },
+            },
+            "top_influential": {
+                "indices": most_influential_indices.tolist(),
+                "values": data_values[most_influential_indices].tolist(),
+            },
+            "least_influential": {
+                "indices": least_influential_indices.tolist(),
+                "values": data_values[least_influential_indices].tolist(),
+            },
+            "training_info": {
+                "total_steps": tim_evaluator.total_steps,
+                "steps_per_epoch": tim_evaluator.steps_per_epoch,
+                "cached_intervals": len(tim_evaluator._influence_cache),
+            },
         }
-        
-        results['evaluators'][method_name] = stats
-        
-        # 保存数值数组
-        values_file = f"{results_dir}/data_values_{method_name}_{timestamp}.npy"
-        np.save(values_file, data_values)
-        
-        print(f"\n📈 {method_name}:")
-        print(f"   均值: {stats['mean']:.6f}")
-        print(f"   标准差: {stats['std']:.6f}")
-        print(f"   范围: [{stats['min']:.6f}, {stats['max']:.6f}]")
-        print(f"   中位数: {stats['median']:.6f}")
-        
-        if method_name == "TimInfluence":
-            print(f"   🔍 TIM特征: 基于最后{evaluator.num_epochs}轮训练的影响")
-    
-    # 7. 保存配置和结果
-    config_file = f"{results_dir}/config_{timestamp}.json"
-    results_file = f"{results_dir}/results_{timestamp}.json"
-    
-    with open(config_file, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
-    
-    with open(results_file, 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
-    
-    print("\n💾 结果文件:")
-    print(f"   📄 配置: {config_file}")
-    print(f"   📄 结果: {results_file}")
-    print(f"   📄 数据估值: {results_dir}/data_values_*_{timestamp}.npy")
-    
-    # 8. 实验总结
-    print("\n🎯 实验总结:")
-    print(f"   🖥️  设备: {actual_device.upper()}")
-    print("   🤖 模型: DistilBERT微调")
-    print(f"   📊 基线准确率: {baseline_accuracy:.4f}")
-    print(f"   ⏱️  总耗时: {elapsed_time}")
-    print(f"   📈 评估方法: {len(evaluators)}种")
-    print(f"   🔢 训练样本: {config['train_count']}")
-    
-    if "tim" in args.methods:
-        print(f"   🆕 TIM方法已启用: 时间窗口为最后{config['tim_config']['num_epochs']}轮")
-    
-    if actual_device == "mps":
-        print("\n🍎 在Apple Silicon上成功运行BERT微调！")
-    elif actual_device == "cuda":
-        print("\n🚀 在GPU上成功运行BERT微调！")
-    else:
-        print("\n💻 在CPU上成功运行BERT微调！")
-    
-    return results
+
+        # 打印关键结果
+        print("\n📈 实验结果摘要:")
+        print(f"   平均影响力: {mean_influence:.6f}")
+        print(f"   影响力标准差: {std_influence:.6f}")
+        print(f"   影响力范围: [{min_influence:.6f}, {max_influence:.6f}]")
+        print(
+            f"   正面样本平均影响力: {results['class_analysis']['positive_samples']['mean_influence']:.6f}"
+        )
+        print(
+            f"   负面样本平均影响力: {results['class_analysis']['negative_samples']['mean_influence']:.6f}"
+        )
+        print(f"   训练总步数: {tim_evaluator.total_steps}")
+
+        return results
+
+    def save_results(self, filename: str = None):
+        """保存实验结果到JSON文件"""
+        import json
+
+        if filename is None:
+            filename = "bert_tim_experiment_results.json"
+
+        filepath = self.output_dir / filename
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(self.results, f, indent=2, ensure_ascii=False)
+
+        print(f"💾 结果已保存到: {filepath}")
+
+    def run_full_experiment_suite(self, selected_models: List[str] = None):
+        """运行完整的BERT模型对比实验"""
+
+        print("🔬 BERT + TIM 情感分析实验套件")
+        print("=" * 80)
+
+        # 获取模型配置
+        model_configs = get_bert_model_configs()
+
+        if selected_models is None:
+            # 默认选择从小到大的关键模型
+            selected_models = [
+                "distilbert-base-uncased",  # 小型: 66M参数
+                "bert-base-uncased",  # 中型: 110M参数
+                "bert-large-uncased",  # 大型: 340M参数 (最大标准BERT)
+            ]
+
+        print(f"📋 选择的模型: {selected_models}")
+
+        # 准备数据（所有实验使用相同数据）
+        data = self.prepare_data()
+
+        # TIM配置 - 设置 t1=0, t2=T（完整训练过程）
+        tim_config = {
+            "t1": 0,  # 从训练开始
+            "t2": None,  # 到训练结束（T）
+            "num_epochs": 2,  # 减少epoch数以适应实验
+            "batch_size": 8,  # 较小的batch size适合BERT
+        }
+
+        print(
+            f"⚙️  TIM配置: t1={tim_config['t1']}, t2=T, epochs={tim_config['num_epochs']}"
+        )
+
+        # 运行每个模型的实验
+        for model_name in selected_models:
+            if model_name not in model_configs:
+                print(f"⚠️  跳过未知模型: {model_name}")
+                continue
+
+            model_config = model_configs[model_name]
+
+            # 运行实验
+            result = self.run_single_experiment(
+                model_name=model_name,
+                model_config=model_config,
+                data=data,
+                tim_config=tim_config,
+            )
+
+            self.results[model_name] = result
+
+        # 保存结果
+        self.save_results()
+
+        # 打印实验摘要
+        self.print_experiment_summary()
+
+    def print_experiment_summary(self):
+        """打印实验结果摘要"""
+        print("\n" + "=" * 80)
+        print("📊 BERT + TIM 实验结果摘要")
+        print("=" * 80)
+
+        successful_results = {
+            k: v for k, v in self.results.items() if v.get("status") == "success"
+        }
+
+        if not successful_results:
+            print("❌ 没有成功的实验结果")
+            return
+
+        print(f"✅ 成功完成实验: {len(successful_results)}/{len(self.results)}")
+        print()
+
+        # 按影响力统计排序
+        results_by_mean_influence = sorted(
+            successful_results.items(),
+            key=lambda x: x[1]["statistics"]["mean_influence"],
+            reverse=True,
+        )
+
+        print("🏆 按平均影响力排名:")
+        print("-" * 60)
+        for i, (model_name, result) in enumerate(results_by_mean_influence, 1):
+            stats = result["statistics"]
+            print(f"{i}. {model_name}")
+            print(f"   平均影响力: {stats['mean_influence']:.6f}")
+            print(f"   标准差: {stats['std_influence']:.6f}")
+            print(f"   训练步数: {result['training_info']['total_steps']}")
+            print()
 
 
-def parse_arguments():
-    """解析命令行参数"""
-    parser = argparse.ArgumentParser(
-        description="BERT情感分析与数据估值实验 (含TIM方法)",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+def main():
+    """主函数 - 运行BERT TIM情感分析实验"""
+
+    print("🚀 启动BERT + TIM情感分析实验")
+    print("=" * 50)
+
+    # 显示可用的BERT模型选项
+    model_configs = get_bert_model_configs()
+    print("📋 可用的BERT模型选项:")
+    for model_name, config in model_configs.items():
+        print(f"  • {model_name}: {config['description']}")
+    print()
+
+    # 创建实验实例
+    experiment = BertTimExperiment(
+        dataset_name="imdb",  # IMDB情感分析数据集
+        train_count=500,  # 训练样本数（实验用较小数据集）
+        valid_count=100,  # 验证样本数
+        test_count=100,  # 测试样本数
+        random_state=42,
+        output_dir="./bert_tim_results",
     )
-    
-    # 基础配置
-    parser.add_argument(
-        "--device", 
-        choices=["auto", "cpu", "cuda", "mps"], 
-        default="auto",
-        help="计算设备 (auto=自动检测最佳设备)"
-    )
-    
-    parser.add_argument(
-        "--dataset",
-        default="imdb",
-        help="数据集名称"
-    )
-    
-    # 数据配置
-    parser.add_argument(
-        "--train-samples",
-        type=int,
-        default=200,
-        help="训练样本数量"
-    )
-    
-    parser.add_argument(
-        "--valid-samples", 
-        type=int,
-        default=100,
-        help="验证样本数量"
-    )
-    
-    parser.add_argument(
-        "--test-samples",
-        type=int, 
-        default=100,
-        help="测试样本数量"
-    )
-    
-    # 训练配置
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        help="训练轮次 (默认根据设备自适应)"
-    )
-    
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        help="批次大小 (默认根据设备自适应)"
-    )
-    
-    parser.add_argument(
-        "--learning-rate",
-        type=float,
-        default=2e-5,
-        help="学习率 (BERT微调推荐值)"
-    )
-    
-    # 评估配置  
-    parser.add_argument(
-        "--methods",
-        nargs="+",
-        choices=["random", "dataoob", "ame", "influence", "tim"],
-        default=["random", "dataoob", "tim"],
-        help="数据估值方法 (包含新的TIM方法)"
-    )
-    
-    parser.add_argument(
-        "--num-models",
-        type=int,
-        help="评估器使用的模型数量 (默认根据设备自适应)"
-    )
-    
-    # TIM特定配置
-    parser.add_argument(
-        "--tim-epochs",
-        type=int,
-        default=3,
-        help="TIM方法回溯的epoch数量"
-    )
-    
-    parser.add_argument(
-        "--tim-reg",
-        type=float,
-        default=0.01,
-        help="TIM方法的L2正则化参数"
-    )
-    
-    parser.add_argument(
-        "--tim-window-type",
-        choices=["last_epochs", "custom_range", "full"],
-        default="last_epochs",
-        help="TIM时间窗口类型"
-    )
-    
-    parser.add_argument(
-        "--tim-start-step",
-        type=int,
-        help="TIM自定义时间窗口起始步骤"
-    )
-    
-    parser.add_argument(
-        "--tim-end-step", 
-        type=int,
-        help="TIM自定义时间窗口结束步骤"
-    )
-    
-    # 输出配置
-    parser.add_argument(
-        "--output-dir",
-        default="my_experiments/results",
-        help="输出目录"
-    )
-    
-    parser.add_argument(
-        "--verbose",
-        action="store_true", 
-        help="详细输出"
-    )
-    
-    return parser.parse_args()
+
+    # 选择要测试的模型（按推荐顺序）
+    selected_models = [
+        "distilbert-base-uncased",  # 快速测试用小模型
+        "bert-base-uncased",  # 标准BERT
+        "bert-large-uncased",  # 最大标准BERT模型
+    ]
+
+    print("🎯 选择测试的模型（按参数规模从小到大）:")
+    for model in selected_models:
+        print(f"  • {model}: {model_configs[model]['parameters']} 参数")
+    print()
+
+    print("⚠️  注意: 这是实验代码，不会实际运行训练")
+    print("   实际运行请在GPU服务器上执行")
+    print()
+
+    # 运行实验套件
+    experiment.run_full_experiment_suite(selected_models)
+
+    print("🎉 实验配置完成！")
+    print("   要实际运行此实验，请在有足够GPU内存的服务器上执行此脚本")
 
 
 if __name__ == "__main__":
-    try:
-        args = parse_arguments()
-        
-        print(f"🔍 命令行参数: {vars(args)}")
-        
-        results = run_experiment(args)
-        
-        if results:
-            print("\n✅ 实验成功完成！")
-            if "tim" in args.methods:
-                print("🎉 TIM (Time-varying Influence Measurement) 方法测试完成")
-            print("🎉 BERT微调情感分析实验结束")
-        else:
-            print("\n❌ 实验失败")
-            sys.exit(1)
-            
-    except KeyboardInterrupt:
-        print("\n⚠️ 实验被用户中断")
-        sys.exit(1)
-        
-    except Exception as e:
-        print(f"\n💥 实验过程中发生错误: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    main()
