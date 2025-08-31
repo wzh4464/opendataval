@@ -233,9 +233,23 @@ class BertTimExperiment:
             # 2. 设置TIM评估器
             tim_evaluator = self.setup_tim_evaluator(**tim_config)
 
-            # 3. 输入数据到TIM
+            # 3. 输入数据到TIM - 需要转换为适当格式
+            # TIM期望的数据格式与BERT不同，需要特殊处理
+            from opendataval.dataloader.util import ListDataset
+            
+            # 将列表数据转换为Dataset格式
+            if isinstance(x_train, list):
+                x_train_dataset = ListDataset(x_train)
+                x_valid_dataset = ListDataset(x_valid)
+            else:
+                x_train_dataset = x_train
+                x_valid_dataset = x_valid
+            
             tim_evaluator.input_data(
-                x_train=x_train, y_train=y_train, x_valid=x_valid, y_valid=y_valid
+                x_train=x_train_dataset, 
+                y_train=y_train, 
+                x_valid=x_valid_dataset, 
+                y_valid=y_valid
             )
 
             # 4. 设置预测模型

@@ -9,7 +9,8 @@
 
 1. **模型兼容性**: 修正为仅支持DistilBERT系列模型（OpenDataVal的BertClassifier基于DistilBERT架构）
 2. **数据处理**: 修复了Subset对象的处理，确保数据格式正确
-3. **TIM配置**: 设置t1=0, t2=T（完整训练过程）
+3. **TIM数据格式**: 修复了list和tensor数据类型不匹配问题，添加ListDataset转换
+4. **TIM配置**: 设置t1=0, t2=T（完整训练过程）
 
 ## 支持的模型
 

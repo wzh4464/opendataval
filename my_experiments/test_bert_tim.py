@@ -50,6 +50,30 @@ def test_basic_functionality():
         print("✅ TIM评估器创建成功")
         print(f"   评估器类型: {type(tim_evaluator)}")
         
+        print("\n📊 测试TIM数据输入...")
+        # 测试数据输入（使用实际的数据格式转换）
+        from opendataval.dataloader.util import ListDataset
+        
+        if isinstance(x_train, list):
+            x_train_dataset = ListDataset(x_train)
+            x_valid_dataset = ListDataset(x_valid)
+        else:
+            x_train_dataset = x_train
+            x_valid_dataset = x_valid
+            
+        tim_evaluator.input_data(
+            x_train=x_train_dataset,
+            y_train=y_train,
+            x_valid=x_valid_dataset, 
+            y_valid=y_valid
+        )
+        print("✅ TIM数据输入成功")
+        print(f"   TIM训练样本数: {tim_evaluator.num_points}")
+        
+        # 设置模型
+        tim_evaluator.pred_model = model
+        print("✅ TIM模型设置成功")
+        
         return True
         
     except Exception as e:
