@@ -18,7 +18,13 @@ import torch
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from opendataval.dataval import AME, DataOob, RandomEvaluator, InfluenceFunction, TimInfluence
+from opendataval.dataval import (
+    AME,
+    DataOob,
+    InfluenceFunction,
+    RandomEvaluator,
+    TimInfluence,
+)
 from opendataval.experiment import ExperimentMediator
 
 
@@ -151,7 +157,7 @@ def run_experiment(args) -> dict:
     config = get_experiment_config(args)
     config['device'] = actual_device  # 使用实际检测到的设备
     
-    print(f"\n📋 实验配置:")
+    print("\n📋 实验配置:")
     print(f"   🖥️  设备: {actual_device.upper()}")
     print(f"   📚 数据集: {config['dataset_name']}")
     print(f"   🏷️  模型: {config['model_name']} (微调DistilBERT)")
@@ -165,7 +171,7 @@ def run_experiment(args) -> dict:
         print(f"   🔧 TIM正则化: {config['tim_config']['regularization']}")
     
     # 3. 设置实验环境
-    print(f"\n🔧 设置实验环境...")
+    print("\n🔧 设置实验环境...")
     try:
         exper_med = ExperimentMediator.model_factory_setup(
             dataset_name=config['dataset_name'],
@@ -177,7 +183,7 @@ def run_experiment(args) -> dict:
             metric_name='accuracy',
             device=actual_device,
         )
-        print(f"✅ 实验环境设置成功")
+        print("✅ 实验环境设置成功")
         # 获取基线准确率（如果可用）
         try:
             baseline_accuracy = getattr(exper_med, 'model_metric', 0.0)
@@ -190,7 +196,7 @@ def run_experiment(args) -> dict:
         return None
     
     # 4. 创建评估器
-    print(f"\n🧮 初始化数据估值方法...")
+    print("\n🧮 初始化数据估值方法...")
     evaluators = create_evaluators(config, args.methods)
     
     if not evaluators:
@@ -206,7 +212,7 @@ def run_experiment(args) -> dict:
             print(f"   📊 {eval_name}")
     
     # 5. 计算数据估值
-    print(f"\n⏳ 开始计算数据估值...")
+    print("\n⏳ 开始计算数据估值...")
     start_time = datetime.now()
     
     try:
@@ -219,7 +225,7 @@ def run_experiment(args) -> dict:
         return None
     
     # 6. 分析结果
-    print(f"\n📊 分析结果...")
+    print("\n📊 分析结果...")
     results = {
         'experiment_info': {
             'timestamp': datetime.now().isoformat(),
@@ -276,15 +282,15 @@ def run_experiment(args) -> dict:
     with open(results_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     
-    print(f"\n💾 结果文件:")
+    print("\n💾 结果文件:")
     print(f"   📄 配置: {config_file}")
     print(f"   📄 结果: {results_file}")
     print(f"   📄 数据估值: {results_dir}/data_values_*_{timestamp}.npy")
     
     # 8. 实验总结
-    print(f"\n🎯 实验总结:")
+    print("\n🎯 实验总结:")
     print(f"   🖥️  设备: {actual_device.upper()}")
-    print(f"   🤖 模型: DistilBERT微调")
+    print("   🤖 模型: DistilBERT微调")
     print(f"   📊 基线准确率: {baseline_accuracy:.4f}")
     print(f"   ⏱️  总耗时: {elapsed_time}")
     print(f"   📈 评估方法: {len(evaluators)}种")
@@ -294,11 +300,11 @@ def run_experiment(args) -> dict:
         print(f"   🆕 TIM方法已启用: 时间窗口为最后{config['tim_config']['num_epochs']}轮")
     
     if actual_device == "mps":
-        print(f"\n🍎 在Apple Silicon上成功运行BERT微调！")
+        print("\n🍎 在Apple Silicon上成功运行BERT微调！")
     elif actual_device == "cuda":
-        print(f"\n🚀 在GPU上成功运行BERT微调！")
+        print("\n🚀 在GPU上成功运行BERT微调！")
     else:
-        print(f"\n💻 在CPU上成功运行BERT微调！")
+        print("\n💻 在CPU上成功运行BERT微调！")
     
     return results
 
@@ -440,16 +446,16 @@ if __name__ == "__main__":
         results = run_experiment(args)
         
         if results:
-            print(f"\n✅ 实验成功完成！")
+            print("\n✅ 实验成功完成！")
             if "tim" in args.methods:
-                print(f"🎉 TIM (Time-varying Influence Measurement) 方法测试完成")
-            print(f"🎉 BERT微调情感分析实验结束")
+                print("🎉 TIM (Time-varying Influence Measurement) 方法测试完成")
+            print("🎉 BERT微调情感分析实验结束")
         else:
-            print(f"\n❌ 实验失败")
+            print("\n❌ 实验失败")
             sys.exit(1)
             
     except KeyboardInterrupt:
-        print(f"\n⚠️ 实验被用户中断")
+        print("\n⚠️ 实验被用户中断")
         sys.exit(1)
         
     except Exception as e:
