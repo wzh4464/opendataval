@@ -682,59 +682,59 @@ class NoisePruningExperiment:
 
 
 def create_experiment(
-    # 数据配置
+    # Data configuration
     dataset_name: str = "imdb",
-    train_count: int = 1000,
-    valid_count: int = 200,
-    test_count: int = 200,
+    train_count: int = 5000,  # Large-scale data for server
+    valid_count: int = 1000,
+    test_count: int = 1000,
     noise_rate: float = 0.3,
     
-    # 模型配置
+    # Model configuration
     model_name: str = "distilbert-base-uncased", 
     
-    # 训练配置
-    epochs: int = 5,
-    batch_size: int = 16,
+    # Training configuration
+    epochs: int = 10,  # More epochs for better convergence
+    batch_size: int = 32,  # Larger batch size for server
     
-    # TIM配置
-    tim_epochs: int = 3,
+    # TIM configuration
+    tim_epochs: int = 5,  # More TIM epochs for better influence computation
     
-    # 实验配置
-    output_dir: str = "./noise_pruning_results",
+    # Experiment configuration
+    output_dir: str = "./large_scale_noise_pruning_results",
     random_state: int = 42
 ) -> NoisePruningExperiment:
     """
-    工厂函数：创建噪声剪枝实验
+    Factory function: Create noise pruning experiment
     
     Parameters:
     -----------
     dataset_name : str
-        数据集名称，默认"imdb"
+        Dataset name, default "imdb"
     train_count : int
-        训练样本数，默认1000
+        Training sample count, default 5000
     valid_count : int
-        验证样本数，默认200
+        Validation sample count, default 1000
     test_count : int
-        测试样本数，默认200
+        Test sample count, default 1000
     noise_rate : float
-        噪声比例，默认0.3
+        Noise ratio, default 0.3
     model_name : str
-        模型名称，默认"distilbert-base-uncased"
+        Model name, default "distilbert-base-uncased"
     epochs : int
-        训练轮数，默认5
+        Training epochs, default 10
     batch_size : int
-        批次大小，默认16
+        Batch size, default 32
     tim_epochs : int
-        TIM轮数，默认3
+        TIM epochs, default 5
     output_dir : str
-        输出目录，默认"./noise_pruning_results"
+        Output directory, default "./large_scale_noise_pruning_results"
     random_state : int
-        随机种子，默认42
+        Random seed, default 42
         
     Returns:
     --------
     NoisePruningExperiment
-        配置好的实验对象
+        Configured experiment object
     """
     return NoisePruningExperiment(
         dataset_name=dataset_name,
@@ -752,26 +752,17 @@ def create_experiment(
 
 
 def main():
-    """主函数 - 运行完整实验"""
-    print("🧪 噪声数据剪枝实验")
+    """Main function - Run complete large-scale experiment"""
+    print("🧪 Large-scale Noise Data Pruning Experiment")
     print("=" * 60)
     
-    # 创建实验（可以根据需要调整参数）
-    experiment = create_experiment(
-        dataset_name="imdb",
-        train_count=100,  # 小规模测试
-        valid_count=50,
-        test_count=50,
-        noise_rate=0.3,
-        epochs=3,
-        tim_epochs=2,
-        output_dir="./mini_noise_experiment"
-    )
+    # Create large-scale experiment with default parameters optimized for server
+    experiment = create_experiment()  # Uses large-scale defaults
     
-    # 运行实验
+    # Run experiment
     results = experiment.run_complete_experiment()
     
-    # 返回结果
+    # Return results
     return results
 
 

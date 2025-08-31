@@ -8,34 +8,34 @@
 from my_experiments.noise_pruning_experiment import create_experiment
 
 def main():
-    """运行快速测试"""
-    print("🧪 开始快速测试噪声剪枝实验")
+    """Run quick test"""
+    print("🧪 Quick Test - Small Scale Noise Pruning Experiment")
     print("=" * 50)
     
-    # 创建小规模实验用于测试
+    # Create small-scale experiment for testing
     experiment = create_experiment(
         dataset_name="imdb",
-        train_count=50,  # 很小的数据量用于快速测试
+        train_count=50,  # Very small data for quick testing
         valid_count=20,
         test_count=20,
         noise_rate=0.3,
-        epochs=2,  # 少量epoch
-        tim_epochs=1,  # 最小TIM训练
-        batch_size=8,  # 小批次
+        epochs=2,  # Few epochs
+        tim_epochs=1,  # Minimal TIM training
+        batch_size=8,  # Small batch size
         output_dir="./quick_test_results"
     )
     
-    # 运行实验
+    # Run experiment
     results = experiment.run_complete_experiment()
     
-    # 检查结果
+    # Check results
     if results.get('status') == 'success':
-        print("\n🎉 快速测试成功完成！")
-        print(f"📁 结果保存在: {experiment.output_dir}")
+        print("\n🎉 Quick test completed successfully!")
+        print(f"📁 Results saved to: {experiment.output_dir}")
         return True
     else:
-        print("\n❌ 快速测试失败")
-        print(f"❗ 错误: {results.get('error_log', [])}")
+        print("\n❌ Quick test failed")
+        print(f"❗ Errors: {results.get('error_log', [])}")
         return False
 
 

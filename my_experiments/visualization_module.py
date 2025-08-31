@@ -1,7 +1,8 @@
 """
-可视化模块
+Visualization module
 
-提供BERT训练过程和TIM影响力分析的可视化功能，支持损失曲线、影响力分布和对比分析。
+Provides visualization functions for BERT training process and TIM influence analysis, 
+supporting loss curves, influence distribution, and comparative analysis.
 """
 
 import numpy as np
@@ -13,15 +14,15 @@ import json
 try:
     import seaborn as sns
     HAS_SEABORN = True
-    # 设置中文字体和样式
-    plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
+    # Set font and styling
+    plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
     sns.set_style("whitegrid")
     plt.rcParams['figure.facecolor'] = 'white'
 except ImportError:
     HAS_SEABORN = False
     print("⚠️ seaborn not found, using basic matplotlib styling")
-    # 设置基本matplotlib样式
+    # Set basic matplotlib styling
     plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
     plt.rcParams['figure.facecolor'] = 'white'
@@ -29,7 +30,7 @@ except ImportError:
 
 
 class ExperimentVisualizer:
-    """实验可视化器"""
+    """Experiment Visualizer"""
     
     def __init__(
         self, 
@@ -38,23 +39,23 @@ class ExperimentVisualizer:
         dpi: int = 150
     ):
         """
-        初始化可视化器
+        Initialize visualizer
         
         Parameters:
         -----------
         save_dir : str
-            图片保存目录
+            Directory to save plots
         figure_size : Tuple[int, int]
-            图片尺寸
+            Figure size
         dpi : int
-            图片分辨率
+            Figure DPI
         """
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
         self.figure_size = figure_size
         self.dpi = dpi
         
-        # 配色方案
+        # Color scheme
         self.colors = {
             'primary': '#2E86C1',
             'secondary': '#28B463', 
@@ -70,67 +71,66 @@ class ExperimentVisualizer:
     def plot_training_curves(
         self,
         history: Dict,
-        title: str = "训练曲线",
+        title: str = "Training Curves",
         save_name: str = "training_curves.png"
     ):
         """
-        绘制训练损失和准确率曲线
+        Plot training loss and accuracy curves
         
         Parameters:
         -----------
         history : Dict
-            训练历史数据
+            Training history data
         title : str
-            图表标题
+            Plot title
         save_name : str
-            保存文件名
+            Save filename
         """
-        print(f"📊 绘制训练曲线: {title}")
+        print(f"📊 Creating training curves: {title}")
         
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=self.figure_size)
         fig.suptitle(title, fontsize=16, fontweight='bold')
         
-        # 1. Epoch级别的损失和准确率
+        # 1. Epoch-level loss and accuracy
         if 'train_loss' in history and 'train_accuracy' in history:
             epochs = range(1, len(history['train_loss']) + 1)
             
-            # 训练损失
+            # Training loss
             ax1.plot(epochs, history['train_loss'], 
-                    color=self.colors['primary'], linewidth=2, label='训练损失')
+                    color=self.colors['primary'], linewidth=2, label='Training Loss')
             if 'valid_loss' in history and len(history['valid_loss']) > 0:
-                # 验证损失可能没有每个epoch都有
                 valid_steps = np.linspace(1, len(epochs), len(history['valid_loss']))
                 ax1.plot(valid_steps, history['valid_loss'], 
-                        color=self.colors['accent'], linewidth=2, label='验证损失')
+                        color=self.colors['accent'], linewidth=2, label='Validation Loss')
             
             ax1.set_xlabel('Epoch')
             ax1.set_ylabel('Loss')
-            ax1.set_title('损失曲线')
+            ax1.set_title('Loss Curves')
             ax1.legend()
             ax1.grid(True, alpha=0.3)
             
-            # 训练准确率
+            # Training accuracy
             ax2.plot(epochs, history['train_accuracy'], 
-                    color=self.colors['secondary'], linewidth=2, label='训练准确率')
+                    color=self.colors['secondary'], linewidth=2, label='Training Accuracy')
             if 'valid_accuracy' in history and len(history['valid_accuracy']) > 0:
                 valid_steps = np.linspace(1, len(epochs), len(history['valid_accuracy']))
                 ax2.plot(valid_steps, history['valid_accuracy'], 
-                        color=self.colors['accent'], linewidth=2, label='验证准确率')
+                        color=self.colors['accent'], linewidth=2, label='Validation Accuracy')
             
             ax2.set_xlabel('Epoch')
             ax2.set_ylabel('Accuracy')
-            ax2.set_title('准确率曲线')
+            ax2.set_title('Accuracy Curves')
             ax2.legend()
             ax2.grid(True, alpha=0.3)
         
-        # 2. Step级别的详细曲线（如果有）
+        # 2. Step-level detailed curves (if available)
         if 'step_losses' in history:
             steps = range(1, len(history['step_losses']) + 1)
             ax3.plot(steps, history['step_losses'], 
                     color=self.colors['primary'], linewidth=1, alpha=0.7)
             ax3.set_xlabel('Training Step')
             ax3.set_ylabel('Loss')
-            ax3.set_title('Step级损失曲线')
+            ax3.set_title('Step-level Loss')
             ax3.grid(True, alpha=0.3)
             
         if 'step_accuracies' in history:
@@ -139,82 +139,82 @@ class ExperimentVisualizer:
                     color=self.colors['secondary'], linewidth=1, alpha=0.7)
             ax4.set_xlabel('Training Step')  
             ax4.set_ylabel('Accuracy')
-            ax4.set_title('Step级准确率曲线')
+            ax4.set_title('Step-level Accuracy')
             ax4.grid(True, alpha=0.3)
         
         plt.tight_layout()
         
-        # 保存图片
+        # Save plot
         save_path = self.save_dir / save_name
         plt.savefig(save_path, dpi=self.dpi, bbox_inches='tight')
         plt.show()
         
-        print(f"💾 训练曲线已保存: {save_path}")
+        print(f"💾 Training curves saved: {save_path}")
         
     def plot_influence_distribution(
         self,
         influence_scores: np.ndarray,
         noise_indices: Optional[np.ndarray] = None,
-        title: str = "影响力分数分布",
+        title: str = "Influence Score Distribution",
         save_name: str = "influence_distribution.png"
     ):
         """
-        绘制影响力分数分布图
+        Plot influence score distribution
         
         Parameters:
         -----------
         influence_scores : np.ndarray
-            影响力分数
+            Influence scores
         noise_indices : Optional[np.ndarray]
-            噪声样本索引
+            Noise sample indices
         title : str
-            图表标题
+            Plot title
         save_name : str
-            保存文件名
+            Save filename
         """
-        print(f"📊 绘制影响力分布: {title}")
+        print(f"📊 Creating influence distribution: {title}")
         
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=self.figure_size)
         fig.suptitle(title, fontsize=16, fontweight='bold')
         
-        # 1. 影响力分数直方图
+        # 1. Influence score histogram
         ax1.hist(influence_scores, bins=50, color=self.colors['primary'], 
                 alpha=0.7, edgecolor='black')
         ax1.axvline(np.mean(influence_scores), color=self.colors['warning'], 
-                   linestyle='--', linewidth=2, label=f'均值: {np.mean(influence_scores):.6f}')
-        ax1.set_xlabel('影响力分数')
-        ax1.set_ylabel('频数')
-        ax1.set_title('影响力分数分布')
+                   linestyle='--', linewidth=2, label=f'Mean: {np.mean(influence_scores):.6f}')
+        ax1.set_xlabel('Influence Score')
+        ax1.set_ylabel('Frequency')
+        ax1.set_title('Influence Score Distribution')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
         
-        # 2. 影响力排名图
+        # 2. Influence ranking plot
         sorted_indices = np.argsort(influence_scores)
         ranked_scores = influence_scores[sorted_indices]
         
         ax2.plot(range(len(ranked_scores)), ranked_scores, 
                 color=self.colors['primary'], linewidth=2)
-        ax2.set_xlabel('样本排名（按影响力）')
-        ax2.set_ylabel('影响力分数')
-        ax2.set_title('影响力排名曲线')
+        ax2.set_xlabel('Sample Rank (by Influence)')
+        ax2.set_ylabel('Influence Score')
+        ax2.set_title('Influence Ranking Curve')
         ax2.grid(True, alpha=0.3)
         
-        # 3. 如果有噪声信息，绘制噪声vs干净样本对比
+        # 3. If noise information available, plot noise vs clean comparison
         if noise_indices is not None:
             clean_indices = np.setdiff1d(np.arange(len(influence_scores)), noise_indices)
             
-            # 分别绘制噪声和干净样本的影响力
+            # Plot influence for noise vs clean samples
             ax3.hist(influence_scores[noise_indices], bins=25, alpha=0.7, 
-                    color=self.colors['noise'], label=f'噪声样本 (n={len(noise_indices)})')
+                    color=self.colors['noise'], label=f'Noise samples (n={len(noise_indices)})')
             ax3.hist(influence_scores[clean_indices], bins=25, alpha=0.7,
-                    color=self.colors['clean'], label=f'干净样本 (n={len(clean_indices)})')
-            ax3.set_xlabel('影响力分数')
-            ax3.set_ylabel('频数')
-            ax3.set_title('噪声vs干净样本影响力对比')
+                    color=self.colors['clean'], label=f'Clean samples (n={len(clean_indices)})')
+            ax3.set_xlabel('Influence Score')
+            ax3.set_ylabel('Frequency')
+            ax3.set_title('Noise vs Clean Sample Influence')
             ax3.legend()
             ax3.grid(True, alpha=0.3)
             
-            # 4. 噪声样本在排名中的位置
+            # 4. Noise sample ranking positions
             noise_ranks = []
             for noise_idx in noise_indices:
                 rank = np.where(sorted_indices == noise_idx)[0][0]
@@ -225,110 +225,110 @@ class ExperimentVisualizer:
                     alpha=0.7, edgecolor='black')
             ax4.axvline(np.mean(noise_ranks), color=self.colors['warning'], 
                        linestyle='--', linewidth=2, 
-                       label=f'平均排名百分位: {np.mean(noise_ranks):.3f}')
-            ax4.set_xlabel('排名百分位')
-            ax4.set_ylabel('噪声样本数')
-            ax4.set_title('噪声样本排名分布')
+                       label=f'Mean rank percentile: {np.mean(noise_ranks):.3f}')
+            ax4.set_xlabel('Rank Percentile')
+            ax4.set_ylabel('Number of Noise Samples')
+            ax4.set_title('Noise Sample Rank Distribution')
             ax4.legend()
             ax4.grid(True, alpha=0.3)
         else:
-            # 如果没有噪声信息，显示影响力统计
-            stats_text = f"""影响力统计:
-均值: {np.mean(influence_scores):.6f}
-标准差: {np.std(influence_scores):.6f}
-最小值: {np.min(influence_scores):.6f}
-最大值: {np.max(influence_scores):.6f}
-样本数: {len(influence_scores)}"""
+            # If no noise info, show influence statistics
+            stats_text = f"""Influence Statistics:
+Mean: {np.mean(influence_scores):.6f}
+Std: {np.std(influence_scores):.6f}
+Min: {np.min(influence_scores):.6f}
+Max: {np.max(influence_scores):.6f}
+Samples: {len(influence_scores)}"""
             
             ax3.text(0.1, 0.5, stats_text, transform=ax3.transAxes, 
                     fontsize=12, verticalalignment='center',
                     bbox=dict(boxstyle="round,pad=0.3", facecolor=self.colors['neutral'], alpha=0.3))
-            ax3.set_title('影响力统计信息')
+            ax3.set_title('Influence Statistics')
             ax3.axis('off')
             
-            # 显示前20和后20的影响力分数
+            # Show top/bottom 20 influence scores
             top_k = min(20, len(influence_scores))
             most_influential = np.argsort(influence_scores)[-top_k:][::-1]
             least_influential = np.argsort(influence_scores)[:top_k]
             
             ax4.barh(range(top_k), influence_scores[most_influential], 
-                    color=self.colors['secondary'], alpha=0.7, label='最有影响力')
+                    color=self.colors['secondary'], alpha=0.7, label='Most Influential')
             ax4.barh(range(top_k, 2*top_k), influence_scores[least_influential], 
-                    color=self.colors['warning'], alpha=0.7, label='最无影响力')
-            ax4.set_xlabel('影响力分数')
-            ax4.set_ylabel('样本索引')
-            ax4.set_title(f'Top/Bottom {top_k} 影响力样本')
+                    color=self.colors['warning'], alpha=0.7, label='Least Influential')
+            ax4.set_xlabel('Influence Score')
+            ax4.set_ylabel('Sample Index')
+            ax4.set_title(f'Top/Bottom {top_k} Influential Samples')
             ax4.legend()
             ax4.grid(True, alpha=0.3)
         
         plt.tight_layout()
         
-        # 保存图片
+        # Save plot
         save_path = self.save_dir / save_name
         plt.savefig(save_path, dpi=self.dpi, bbox_inches='tight')
         plt.show()
         
-        print(f"💾 影响力分布图已保存: {save_path}")
+        print(f"💾 Influence distribution saved: {save_path}")
         
     def plot_comparative_analysis(
         self,
         original_history: Dict,
         pruned_history: Dict,
         influence_stats: Dict,
-        title: str = "剪枝前后对比分析",
+        title: str = "Before vs After Pruning Analysis",
         save_name: str = "comparative_analysis.png"
     ):
         """
-        绘制剪枝前后的对比分析图
+        Plot comparative analysis before/after pruning
         
         Parameters:
         -----------
         original_history : Dict
-            原始（含噪声）训练历史
+            Original (noisy) training history
         pruned_history : Dict
-            剪枝后训练历史
+            Pruned training history
         influence_stats : Dict
-            影响力统计信息
+            Influence statistics
         title : str
-            图表标题
+            Plot title
         save_name : str
-            保存文件名
+            Save filename
         """
-        print(f"📊 绘制对比分析: {title}")
+        print(f"📊 Creating comparative analysis: {title}")
         
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
         fig.suptitle(title, fontsize=16, fontweight='bold')
         
-        # 1. 训练损失对比
+        # 1. Training loss comparison
         if 'train_loss' in original_history and 'train_loss' in pruned_history:
             orig_epochs = range(1, len(original_history['train_loss']) + 1)
             pruned_epochs = range(1, len(pruned_history['train_loss']) + 1)
             
             ax1.plot(orig_epochs, original_history['train_loss'], 
-                    color=self.colors['original'], linewidth=2, label='原始（含噪声）')
+                    color=self.colors['original'], linewidth=2, label='Original (Noisy)')
             ax1.plot(pruned_epochs, pruned_history['train_loss'], 
-                    color=self.colors['pruned'], linewidth=2, label='剪枝后')
+                    color=self.colors['pruned'], linewidth=2, label='After Pruning')
             
             ax1.set_xlabel('Epoch')
             ax1.set_ylabel('Training Loss')
-            ax1.set_title('训练损失对比')
+            ax1.set_title('Training Loss Comparison')
             ax1.legend()
             ax1.grid(True, alpha=0.3)
         
-        # 2. 训练准确率对比
+        # 2. Training accuracy comparison
         if 'train_accuracy' in original_history and 'train_accuracy' in pruned_history:
             ax2.plot(orig_epochs, original_history['train_accuracy'], 
-                    color=self.colors['original'], linewidth=2, label='原始（含噪声）')
+                    color=self.colors['original'], linewidth=2, label='Original (Noisy)')
             ax2.plot(pruned_epochs, pruned_history['train_accuracy'], 
-                    color=self.colors['pruned'], linewidth=2, label='剪枝后')
+                    color=self.colors['pruned'], linewidth=2, label='After Pruning')
             
             ax2.set_xlabel('Epoch')
             ax2.set_ylabel('Training Accuracy')
-            ax2.set_title('训练准确率对比')
+            ax2.set_title('Training Accuracy Comparison')
             ax2.legend()
             ax2.grid(True, alpha=0.3)
         
-        # 3. 最终性能对比
+        # 3. Final performance comparison
         orig_final = original_history.get('final_performance', {})
         pruned_final = pruned_history.get('final_performance', {})
         
@@ -339,62 +339,62 @@ class ExperimentVisualizer:
         x = np.arange(len(metrics))
         width = 0.35
         
-        ax3.bar(x - width/2, orig_values, width, label='原始（含噪声）', 
+        ax3.bar(x - width/2, orig_values, width, label='Original (Noisy)', 
                color=self.colors['original'], alpha=0.7)
-        ax3.bar(x + width/2, pruned_values, width, label='剪枝后', 
+        ax3.bar(x + width/2, pruned_values, width, label='After Pruning', 
                color=self.colors['pruned'], alpha=0.7)
         
-        ax3.set_xlabel('指标')
-        ax3.set_ylabel('准确率')
-        ax3.set_title('最终性能对比')
+        ax3.set_xlabel('Metric')
+        ax3.set_ylabel('Accuracy')
+        ax3.set_title('Final Performance Comparison')
         ax3.set_xticks(x)
-        ax3.set_xticklabels(['训练准确率', '验证准确率'])
+        ax3.set_xticklabels(['Train Accuracy', 'Valid Accuracy'])
         ax3.legend()
         ax3.grid(True, alpha=0.3)
         
-        # 添加数值标签
+        # Add value labels
         for i, (orig, pruned) in enumerate(zip(orig_values, pruned_values)):
             ax3.text(i - width/2, orig + 0.01, f'{orig:.3f}', 
                     ha='center', va='bottom', fontweight='bold')
             ax3.text(i + width/2, pruned + 0.01, f'{pruned:.3f}', 
                     ha='center', va='bottom', fontweight='bold')
         
-        # 4. 实验设置和改进总结
-        summary_text = f"""实验设置:
-• 数据集: {influence_stats.get('total_samples', 'N/A')} 个训练样本
-• 噪声率: {influence_stats.get('noise_rate', 0)*100:.1f}%
-• 剪枝样本: {influence_stats.get('noise_count', 'N/A')} 个
+        # 4. Experiment setup and improvement summary
+        summary_text = f"""Experiment Setup:
+• Dataset: {influence_stats.get('total_samples', 'N/A')} training samples
+• Noise rate: {influence_stats.get('noise_rate', 0)*100:.1f}%
+• Pruned samples: {influence_stats.get('noise_count', 'N/A')}
 
-性能改进:
-• 训练准确率: {orig_final.get('train_accuracy', 0):.3f} → {pruned_final.get('train_accuracy', 0):.3f} ({pruned_final.get('train_accuracy', 0) - orig_final.get('train_accuracy', 0):+.3f})
-• 验证准确率: {orig_final.get('valid_accuracy', 0):.3f} → {pruned_final.get('valid_accuracy', 0):.3f} ({pruned_final.get('valid_accuracy', 0) - orig_final.get('valid_accuracy', 0):+.3f})
-• 训练时间: {orig_final.get('total_time', 0):.1f}s → {pruned_final.get('total_time', 0):.1f}s
+Performance Improvement:
+• Train accuracy: {orig_final.get('train_accuracy', 0):.3f} → {pruned_final.get('train_accuracy', 0):.3f} ({pruned_final.get('train_accuracy', 0) - orig_final.get('train_accuracy', 0):+.3f})
+• Valid accuracy: {orig_final.get('valid_accuracy', 0):.3f} → {pruned_final.get('valid_accuracy', 0):.3f} ({pruned_final.get('valid_accuracy', 0) - orig_final.get('valid_accuracy', 0):+.3f})
+• Training time: {orig_final.get('total_time', 0):.1f}s → {pruned_final.get('total_time', 0):.1f}s
 
-TIM影响力分析:
-• 平均影响力: {influence_stats.get('mean_influence', 0):.6f}
-• 影响力标准差: {influence_stats.get('std_influence', 0):.6f}"""
+TIM Influence Analysis:
+• Mean influence: {influence_stats.get('mean_influence', 0):.6f}
+• Influence std: {influence_stats.get('std_influence', 0):.6f}"""
 
         if 'noise_analysis' in influence_stats:
             noise_analysis = influence_stats['noise_analysis']
             summary_text += f"""
-• 噪声样本平均影响力: {noise_analysis.get('noise_samples', {}).get('mean_influence', 0):.6f}
-• 干净样本平均影响力: {noise_analysis.get('clean_samples', {}).get('mean_influence', 0):.6f}
-• 噪声样本平均排名百分位: {noise_analysis.get('mean_noise_rank_percentile', 0):.3f}"""
+• Noise mean influence: {noise_analysis.get('noise_samples', {}).get('mean_influence', 0):.6f}
+• Clean mean influence: {noise_analysis.get('clean_samples', {}).get('mean_influence', 0):.6f}
+• Noise mean rank percentile: {noise_analysis.get('mean_noise_rank_percentile', 0):.3f}"""
         
         ax4.text(0.05, 0.95, summary_text, transform=ax4.transAxes, 
                 fontsize=10, verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle="round,pad=0.3", facecolor=self.colors['neutral'], alpha=0.2))
-        ax4.set_title('实验总结')
+        ax4.set_title('Experiment Summary')
         ax4.axis('off')
         
         plt.tight_layout()
         
-        # 保存图片
+        # Save plot
         save_path = self.save_dir / save_name
         plt.savefig(save_path, dpi=self.dpi, bbox_inches='tight')
         plt.show()
         
-        print(f"💾 对比分析图已保存: {save_path}")
+        print(f"💾 Comparative analysis saved: {save_path}")
         
     def plot_pruning_analysis(
         self,
@@ -402,76 +402,76 @@ TIM影响力分析:
         prune_indices: np.ndarray,
         keep_indices: np.ndarray,
         noise_indices: Optional[np.ndarray] = None,
-        title: str = "数据剪枝分析",
+        title: str = "Data Pruning Analysis",
         save_name: str = "pruning_analysis.png"
     ):
         """
-        绘制数据剪枝分析图
+        Plot data pruning analysis
         
         Parameters:
         -----------
         influence_scores : np.ndarray
-            影响力分数
+            Influence scores
         prune_indices : np.ndarray
-            被剪枝的样本索引
+            Pruned sample indices
         keep_indices : np.ndarray
-            保留的样本索引
+            Kept sample indices
         noise_indices : Optional[np.ndarray]
-            噪声样本索引
+            Noise sample indices
         title : str
-            图表标题
+            Plot title
         save_name : str
-            保存文件名
+            Save filename
         """
-        print(f"📊 绘制剪枝分析: {title}")
+        print(f"📊 Creating pruning analysis: {title}")
         
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=self.figure_size)
         fig.suptitle(title, fontsize=16, fontweight='bold')
         
-        # 1. 剪枝vs保留样本的影响力对比
+        # 1. Pruned vs kept sample influence comparison
         ax1.hist(influence_scores[prune_indices], bins=30, alpha=0.7, 
-                color=self.colors['warning'], label=f'剪枝样本 (n={len(prune_indices)})')
+                color=self.colors['warning'], label=f'Pruned samples (n={len(prune_indices)})')
         ax1.hist(influence_scores[keep_indices], bins=30, alpha=0.7,
-                color=self.colors['secondary'], label=f'保留样本 (n={len(keep_indices)})')
-        ax1.set_xlabel('影响力分数')
-        ax1.set_ylabel('频数')
-        ax1.set_title('剪枝vs保留样本影响力分布')
+                color=self.colors['secondary'], label=f'Kept samples (n={len(keep_indices)})')
+        ax1.set_xlabel('Influence Score')
+        ax1.set_ylabel('Frequency')
+        ax1.set_title('Pruned vs Kept Sample Influence Distribution')
         ax1.legend()
         ax1.grid(True, alpha=0.3)
         
-        # 2. 影响力排名与剪枝决策
+        # 2. Influence ranking and pruning decision
         sorted_indices = np.argsort(influence_scores)
         ranks = np.arange(len(influence_scores))
         
-        # 标记剪枝和保留的样本
+        # Mark pruned and kept samples
         prune_mask = np.isin(sorted_indices, prune_indices)
         keep_mask = np.isin(sorted_indices, keep_indices)
         
         ax2.scatter(ranks[prune_mask], influence_scores[sorted_indices[prune_mask]], 
-                   color=self.colors['warning'], alpha=0.7, s=20, label='剪枝样本')
+                   color=self.colors['warning'], alpha=0.7, s=20, label='Pruned samples')
         ax2.scatter(ranks[keep_mask], influence_scores[sorted_indices[keep_mask]], 
-                   color=self.colors['secondary'], alpha=0.7, s=20, label='保留样本')
+                   color=self.colors['secondary'], alpha=0.7, s=20, label='Kept samples')
         
-        # 添加剪枝阈值线
+        # Add pruning threshold line
         threshold_rank = len(prune_indices)
         ax2.axvline(threshold_rank, color=self.colors['accent'], 
-                   linestyle='--', linewidth=2, label=f'剪枝阈值')
+                   linestyle='--', linewidth=2, label=f'Pruning threshold')
         
-        ax2.set_xlabel('影响力排名')
-        ax2.set_ylabel('影响力分数')
-        ax2.set_title('影响力排名与剪枝决策')
+        ax2.set_xlabel('Influence Rank')
+        ax2.set_ylabel('Influence Score')
+        ax2.set_title('Influence Ranking and Pruning Decision')
         ax2.legend()
         ax2.grid(True, alpha=0.3)
         
-        # 3. 如果有噪声信息，分析剪枝效果
+        # 3. If noise info available, analyze pruning effectiveness
         if noise_indices is not None:
-            # 计算剪枝捕获的噪声样本比例
+            # Calculate noise capture ratio
             pruned_noise = np.intersect1d(prune_indices, noise_indices)
             noise_recall = len(pruned_noise) / len(noise_indices) if len(noise_indices) > 0 else 0
             noise_precision = len(pruned_noise) / len(prune_indices) if len(prune_indices) > 0 else 0
             
-            # 创建混淆矩阵风格的可视化
-            categories = ['剪枝样本', '保留样本']
+            # Create confusion matrix style visualization
+            categories = ['Pruned samples', 'Kept samples']
             noise_counts = [
                 len(np.intersect1d(prune_indices, noise_indices)),
                 len(np.intersect1d(keep_indices, noise_indices))
@@ -484,20 +484,20 @@ TIM影响力分析:
             x = np.arange(len(categories))
             width = 0.35
             
-            bars1 = ax3.bar(x - width/2, noise_counts, width, label='噪声样本', 
+            bars1 = ax3.bar(x - width/2, noise_counts, width, label='Noise samples', 
                            color=self.colors['noise'], alpha=0.7)
-            bars2 = ax3.bar(x + width/2, clean_counts, width, label='干净样本', 
+            bars2 = ax3.bar(x + width/2, clean_counts, width, label='Clean samples', 
                            color=self.colors['clean'], alpha=0.7)
             
-            ax3.set_xlabel('剪枝决策')
-            ax3.set_ylabel('样本数量')
-            ax3.set_title(f'噪声捕获效果 (召回率: {noise_recall:.2%}, 精确率: {noise_precision:.2%})')
+            ax3.set_xlabel('Pruning Decision')
+            ax3.set_ylabel('Sample Count')
+            ax3.set_title(f'Noise Capture Effectiveness (Recall: {noise_recall:.2%}, Precision: {noise_precision:.2%})')
             ax3.set_xticks(x)
             ax3.set_xticklabels(categories)
             ax3.legend()
             ax3.grid(True, alpha=0.3)
             
-            # 添加数值标签
+            # Add value labels
             for bars in [bars1, bars2]:
                 for bar in bars:
                     height = bar.get_height()
@@ -506,45 +506,45 @@ TIM影响力分析:
                                xytext=(0, 3), textcoords="offset points",
                                ha='center', va='bottom', fontweight='bold')
         
-        # 4. 剪枝统计摘要
-        stats_text = f"""剪枝统计:
-总样本数: {len(influence_scores)}
-剪枝样本数: {len(prune_indices)} ({len(prune_indices)/len(influence_scores)*100:.1f}%)
-保留样本数: {len(keep_indices)} ({len(keep_indices)/len(influence_scores)*100:.1f}%)
+        # 4. Pruning statistics summary
+        stats_text = f"""Pruning Statistics:
+Total samples: {len(influence_scores)}
+Pruned samples: {len(prune_indices)} ({len(prune_indices)/len(influence_scores)*100:.1f}%)
+Kept samples: {len(keep_indices)} ({len(keep_indices)/len(influence_scores)*100:.1f}%)
 
-影响力阈值: {influence_scores[sorted_indices[len(prune_indices)-1]]:.6f}
+Influence threshold: {influence_scores[sorted_indices[len(prune_indices)-1]]:.6f}
 
-剪枝样本影响力:
-• 均值: {np.mean(influence_scores[prune_indices]):.6f}
-• 标准差: {np.std(influence_scores[prune_indices]):.6f}
+Pruned sample influence:
+• Mean: {np.mean(influence_scores[prune_indices]):.6f}
+• Std: {np.std(influence_scores[prune_indices]):.6f}
 
-保留样本影响力:
-• 均值: {np.mean(influence_scores[keep_indices]):.6f}
-• 标准差: {np.std(influence_scores[keep_indices]):.6f}"""
+Kept sample influence:
+• Mean: {np.mean(influence_scores[keep_indices]):.6f}
+• Std: {np.std(influence_scores[keep_indices]):.6f}"""
         
         if noise_indices is not None:
             stats_text += f"""
 
-噪声检测效果:
-• 噪声样本数: {len(noise_indices)}
-• 捕获噪声数: {len(np.intersect1d(prune_indices, noise_indices))}
-• 噪声召回率: {noise_recall:.2%}
-• 剪枝精确率: {noise_precision:.2%}"""
+Noise Detection Effectiveness:
+• Noise samples: {len(noise_indices)}
+• Captured noise: {len(np.intersect1d(prune_indices, noise_indices))}
+• Noise recall: {noise_recall:.2%}
+• Pruning precision: {noise_precision:.2%}"""
         
         ax4.text(0.05, 0.95, stats_text, transform=ax4.transAxes, 
                 fontsize=10, verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle="round,pad=0.3", facecolor=self.colors['neutral'], alpha=0.2))
-        ax4.set_title('剪枝统计摘要')
+        ax4.set_title('Pruning Statistics Summary')
         ax4.axis('off')
         
         plt.tight_layout()
         
-        # 保存图片
+        # Save plot
         save_path = self.save_dir / save_name
         plt.savefig(save_path, dpi=self.dpi, bbox_inches='tight')
         plt.show()
         
-        print(f"💾 剪枝分析图已保存: {save_path}")
+        print(f"💾 Pruning analysis saved: {save_path}")
         
     def save_experiment_summary(
         self,
@@ -552,21 +552,21 @@ TIM影响力分析:
         save_name: str = "experiment_summary.json"
     ):
         """
-        保存实验结果摘要
+        Save experiment results summary
         
         Parameters:
         -----------
         experiment_results : Dict
-            完整的实验结果
+            Complete experiment results
         save_name : str
-            保存文件名
+            Save filename
         """
         save_path = self.save_dir / save_name
         
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(experiment_results, f, indent=2, ensure_ascii=False, default=str)
             
-        print(f"💾 实验摘要已保存: {save_path}")
+        print(f"💾 Experiment summary saved: {save_path}")
 
 
 def create_visualizer(
@@ -575,21 +575,21 @@ def create_visualizer(
     dpi: int = 150
 ) -> ExperimentVisualizer:
     """
-    工厂函数：创建实验可视化器
+    Factory function: Create experiment visualizer
     
     Parameters:
     -----------
     save_dir : str
-        图片保存目录，默认"./experiment_plots"
+        Directory to save plots, default "./experiment_plots"
     figure_size : Tuple[int, int]
-        图片尺寸，默认(12, 8)
+        Figure size, default (12, 8)
     dpi : int
-        图片分辨率，默认150
+        Figure DPI, default 150
         
     Returns:
     --------
     ExperimentVisualizer
-        配置好的可视化器
+        Configured visualizer
     """
     return ExperimentVisualizer(
         save_dir=save_dir,
@@ -599,16 +599,16 @@ def create_visualizer(
 
 
 if __name__ == "__main__":
-    # 测试可视化器
-    print("🧪 测试可视化器")
+    # Test visualizer
+    print("🧪 Testing visualizer")
     
-    # 创建可视化器
+    # Create visualizer
     visualizer = create_visualizer()
     
-    # 生成测试数据
+    # Generate test data
     np.random.seed(42)
     
-    # 模拟训练历史
+    # Mock training history
     epochs = 5
     test_history = {
         'train_loss': np.random.exponential(0.5, epochs) + 0.1,
@@ -619,15 +619,15 @@ if __name__ == "__main__":
         'step_accuracies': np.random.beta(8, 2, epochs*20)
     }
     
-    # 模拟影响力数据
+    # Mock influence data
     n_samples = 100
     influence_scores = np.random.normal(0.5, 0.2, n_samples)
     noise_indices = np.random.choice(n_samples, 30, replace=False)
     
-    print("🎨 测试训练曲线绘制...")
-    visualizer.plot_training_curves(test_history, title="测试训练曲线")
+    print("🎨 Testing training curve plotting...")
+    visualizer.plot_training_curves(test_history, title="Test Training Curves")
     
-    print("🎨 测试影响力分布绘制...")
-    visualizer.plot_influence_distribution(influence_scores, noise_indices, title="测试影响力分布")
+    print("🎨 Testing influence distribution plotting...")
+    visualizer.plot_influence_distribution(influence_scores, noise_indices, title="Test Influence Distribution")
     
-    print("✅ 可视化器测试完成")
+    print("✅ Visualizer test complete")
