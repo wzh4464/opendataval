@@ -21,10 +21,10 @@ import numpy as np
 import time
 
 # 导入我们的模块
-from noise_data_module import create_noise_processor
-from bert_training_module import create_bert_trainer
-from tim_influence_module import create_tim_calculator
-from visualization_module import create_visualizer
+from my_experiments.noise_data_module import create_noise_processor
+from my_experiments.bert_training_module import create_bert_trainer
+from my_experiments.tim_influence_module import create_tim_calculator
+from my_experiments.visualization_module import create_visualizer
 
 
 class NoisePruningExperiment:

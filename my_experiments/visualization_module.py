@@ -6,16 +6,26 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import json
 
-# 设置中文字体和样式
-plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
-sns.set_style("whitegrid")
-plt.rcParams['figure.facecolor'] = 'white'
+try:
+    import seaborn as sns
+    HAS_SEABORN = True
+    # 设置中文字体和样式
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
+    sns.set_style("whitegrid")
+    plt.rcParams['figure.facecolor'] = 'white'
+except ImportError:
+    HAS_SEABORN = False
+    print("⚠️ seaborn not found, using basic matplotlib styling")
+    # 设置基本matplotlib样式
+    plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
+    plt.rcParams['figure.facecolor'] = 'white'
+    plt.style.use('default')
 
 
 class ExperimentVisualizer:

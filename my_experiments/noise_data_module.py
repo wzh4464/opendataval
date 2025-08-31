@@ -10,7 +10,7 @@ from typing import Tuple, List, Optional
 from pathlib import Path
 
 from opendataval.dataloader import DataFetcher
-from opendataval.dataloader.noisify import add_gauss_noise, add_noise
+from opendataval.dataloader.noisify import add_gauss_noise, mix_labels
 
 
 class NoiseDataProcessor:
@@ -99,7 +99,7 @@ class NoiseDataProcessor:
         Parameters:
         -----------
         noise_type : str
-            噪声类型: 'uniform' 或 'class_dependent'
+            噪声类型: 'uniform' 或 'opendataval' (使用OpenDataVal的mix_labels)
             
         Returns:
         --------
@@ -114,37 +114,87 @@ class NoiseDataProcessor:
         n_samples = len(y_train_clean)
         n_noisy = int(n_samples * self.noise_rate)
         
-        # 设置随机种子
-        np.random.seed(self.random_state)
-        torch.manual_seed(self.random_state)
-        
-        # 选择要加噪声的样本
-        noise_indices = np.random.choice(n_samples, size=n_noisy, replace=False)
-        
-        # 创建噪声标签
-        y_train_noisy = y_train_clean.clone()
+        if noise_type == "opendataval":
+            # 使用OpenDataVal的mix_labels方法
+            # 首先需要创建一个临时的DataFetcher来使用mix_labels
+            try:
+                # 创建临时DataFetcher - 需要重新构建以使用mix_labels
+                temp_fetcher = DataFetcher.setup(
+                    dataset_name=self.dataset_name,
+                    train_count=self.train_count,
+                    valid_count=self.valid_count,
+                    test_count=self.test_count,
+                    random_state=self.random_state
+                )
+                
+                # 使用mix_labels注入噪声
+                noisy_result = mix_labels(temp_fetcher, noise_rate=self.noise_rate)
+                
+                # 获取噪声后的标签和噪声索引
+                y_train_noisy = torch.tensor(noisy_result['y_train'], dtype=torch.long)
+                y_valid_noisy = torch.tensor(noisy_result['y_valid'], dtype=torch.long)
+                noise_indices = noisy_result['noisy_train_indices']
+                
+                # 创建噪声数据
+                self.noisy_data = self.clean_data.copy()
+                self.noisy_data['y_train'] = y_train_noisy
+                self.noisy_data['y_valid'] = y_valid_noisy  # 验证集也可能有噪声
+                self.noise_indices = noise_indices
+                
+                # 统计噪声信息
+                actually_flipped = len(noise_indices)
+                
+            except Exception as e:
+                print(f"⚠️  OpenDataVal噪声注入失败: {e}")
+                print("   回退到手动噪声注入...")
+                noise_type = "uniform"  # 回退到手动方法
         
         if noise_type == "uniform":
+            # 手动均匀标签翻转
+            # 设置随机种子
+            np.random.seed(self.random_state)
+            torch.manual_seed(self.random_state)
+            
+            # 选择要加噪声的样本
+            noise_indices = np.random.choice(n_samples, size=n_noisy, replace=False)
+            
+            # 创建噪声标签
+            y_train_noisy = y_train_clean.clone()
+            
             # 均匀标签翻转
             for idx in noise_indices:
                 # 对于二分类，直接翻转标签
                 y_train_noisy[idx] = 1 - y_train_noisy[idx]
                 
+            # 创建噪声数据副本
+            self.noisy_data = self.clean_data.copy()
+            self.noisy_data['y_train'] = y_train_noisy
+            self.noise_indices = noise_indices
+            
+            # 统计噪声信息
+            actually_flipped = torch.sum(y_train_clean != y_train_noisy).item()
+            
         elif noise_type == "class_dependent":
-            # 类别相关噪声（可以扩展）
+            # 类别相关噪声
+            # 设置随机种子
+            np.random.seed(self.random_state)
+            torch.manual_seed(self.random_state)
+            
+            noise_indices = np.random.choice(n_samples, size=n_noisy, replace=False)
+            y_train_noisy = y_train_clean.clone()
+            
             for idx in noise_indices:
                 # 简化版：也是翻转，但可以根据类别设置不同噪声率
                 y_train_noisy[idx] = 1 - y_train_noisy[idx]
+            
+            self.noisy_data = self.clean_data.copy()
+            self.noisy_data['y_train'] = y_train_noisy
+            self.noise_indices = noise_indices
+            
+            actually_flipped = torch.sum(y_train_clean != y_train_noisy).item()
+            
         else:
             raise ValueError(f"不支持的噪声类型: {noise_type}")
-        
-        # 创建噪声数据副本
-        self.noisy_data = self.clean_data.copy()
-        self.noisy_data['y_train'] = y_train_noisy
-        self.noise_indices = noise_indices
-        
-        # 统计噪声信息
-        actually_flipped = torch.sum(y_train_clean != y_train_noisy).item()
         
         print(f"✅ 噪声注入完成")
         print(f"   目标噪声样本: {n_noisy}")
