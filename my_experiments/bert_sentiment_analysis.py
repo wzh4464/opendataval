@@ -26,50 +26,31 @@ def get_bert_model_configs() -> Dict[str, Dict]:
     """获取不同大小的BERT模型配置
 
     返回从小到大的BERT模型配置列表，包括参数规模信息。
+    注意：OpenDataVal的BertClassifier基于DistilBERT架构，只能使用DistilBERT预训练模型。
 
     Returns:
         Dict[str, Dict]: 模型配置字典，键为模型名称，值为配置参数
     """
     return {
-        # 小型模型 (适合快速实验)
+        # DistilBERT模型 (OpenDataVal支持)
         "distilbert-base-uncased": {
             "pretrained_model_name": "distilbert-base-uncased",
             "parameters": "66M",
             "description": "DistilBERT-Base (66M参数) - BERT的轻量级版本，速度快",
         },
-        # 标准BERT模型
-        "bert-base-uncased": {
-            "pretrained_model_name": "bert-base-uncased",
-            "parameters": "110M",
-            "description": "BERT-Base (110M参数) - 原始BERT基础版本",
+        "distilbert-base-cased": {
+            "pretrained_model_name": "distilbert-base-cased", 
+            "parameters": "66M",
+            "description": "DistilBERT-Base-Cased (66M参数) - 区分大小写版本",
         },
-        "bert-base-cased": {
-            "pretrained_model_name": "bert-base-cased",
-            "parameters": "110M",
-            "description": "BERT-Base-Cased (110M参数) - 区分大小写版本",
+        # 多语言DistilBERT
+        "distilbert-base-multilingual-cased": {
+            "pretrained_model_name": "distilbert-base-multilingual-cased",
+            "parameters": "134M", 
+            "description": "DistilBERT多语言 (134M参数) - 支持多种语言",
         },
-        # 大型模型 (推荐用于最佳性能)
-        "bert-large-uncased": {
-            "pretrained_model_name": "bert-large-uncased",
-            "parameters": "340M",
-            "description": "BERT-Large (340M参数) - 最大的标准BERT模型，性能最佳",
-        },
-        "bert-large-cased": {
-            "pretrained_model_name": "bert-large-cased",
-            "parameters": "340M",
-            "description": "BERT-Large-Cased (340M参数) - 大型区分大小写版本",
-        },
-        # RoBERTa变体 (通常性能更好)
-        "roberta-base": {
-            "pretrained_model_name": "roberta-base",
-            "parameters": "125M",
-            "description": "RoBERTa-Base (125M参数) - BERT的改进版本",
-        },
-        "roberta-large": {
-            "pretrained_model_name": "roberta-large",
-            "parameters": "355M",
-            "description": "RoBERTa-Large (355M参数) - 大型RoBERTa模型，通常性能最佳",
-        },
+        # 注意：标准BERT模型与DistilBERT架构不兼容，已移除
+        # 如需使用更大模型，需要修改BertClassifier类的实现
     }
 
 
@@ -138,12 +119,32 @@ class BertTimExperiment:
 
         # 获取原始文本数据（不使用embedding）
         x_train, y_train, x_valid, y_valid, x_test, y_test = fetcher.datapoints
+        
+        # 转换数据类型以确保兼容性
+        if hasattr(x_train, 'dataset'):
+            # 如果是Subset对象，提取实际数据
+            x_train_data = [x_train.dataset[i] for i in x_train.indices]
+            x_valid_data = [x_valid.dataset[i] for i in x_valid.indices] 
+            x_test_data = [x_test.dataset[i] for i in x_test.indices]
+        else:
+            x_train_data, x_valid_data, x_test_data = x_train, x_valid, x_test
+            
+        # 确保标签是torch tensor格式
+        if not isinstance(y_train, torch.Tensor):
+            y_train = torch.tensor(y_train, dtype=torch.long)
+        if not isinstance(y_valid, torch.Tensor):
+            y_valid = torch.tensor(y_valid, dtype=torch.long)
+        if not isinstance(y_test, torch.Tensor):
+            y_test = torch.tensor(y_test, dtype=torch.long)
 
         print("✅ 数据加载完成")
-        print(f"   训练集样本数: {len(x_train)}")
-        print(f"   验证集样本数: {len(x_valid)}")
-        print(f"   测试集样本数: {len(x_test)}")
+        print(f"   训练集样本数: {len(x_train_data)}")
+        print(f"   验证集样本数: {len(x_valid_data)}")
+        print(f"   测试集样本数: {len(x_test_data)}")
         print(f"   类别数: {len(np.unique(y_train))}")
+        
+        # 返回处理后的数据
+        return x_train_data, y_train, x_valid_data, y_valid, x_test_data, y_test
 
         return x_train, y_train, x_valid, y_valid, x_test, y_test
 
@@ -374,11 +375,11 @@ class BertTimExperiment:
         model_configs = get_bert_model_configs()
 
         if selected_models is None:
-            # 默认选择从小到大的关键模型
+            # 默认选择支持的DistilBERT模型
             selected_models = [
-                "distilbert-base-uncased",  # 小型: 66M参数
-                "bert-base-uncased",  # 中型: 110M参数
-                "bert-large-uncased",  # 大型: 340M参数 (最大标准BERT)
+                "distilbert-base-uncased",  # 基础: 66M参数
+                "distilbert-base-cased",    # 区分大小写: 66M参数  
+                "distilbert-base-multilingual-cased",  # 多语言: 134M参数 (最大)
             ]
 
         print(f"📋 选择的模型: {selected_models}")
@@ -480,27 +481,28 @@ def main():
         output_dir="./bert_tim_results",
     )
 
-    # 选择要测试的模型（按推荐顺序）
+    # 选择要测试的模型（按推荐顺序，仅支持DistilBERT）
     selected_models = [
-        "distilbert-base-uncased",  # 快速测试用小模型
-        "bert-base-uncased",  # 标准BERT
-        "bert-large-uncased",  # 最大标准BERT模型
+        "distilbert-base-uncased",  # 基础模型
+        "distilbert-base-cased",    # 区分大小写
+        "distilbert-base-multilingual-cased",  # 最大的多语言模型
     ]
 
-    print("🎯 选择测试的模型（按参数规模从小到大）:")
+    print("🎯 选择测试的模型（DistilBERT系列，按参数规模）:")
     for model in selected_models:
         print(f"  • {model}: {model_configs[model]['parameters']} 参数")
     print()
-
-    print("⚠️  注意: 这是实验代码，不会实际运行训练")
-    print("   实际运行请在GPU服务器上执行")
+    
+    print("ℹ️  说明: OpenDataVal的BertClassifier基于DistilBERT架构")
+    print("   只支持DistilBERT系列预训练模型，不支持标准BERT/RoBERTa")
+    print("   实验在GPU服务器上运行")
     print()
 
     # 运行实验套件
     experiment.run_full_experiment_suite(selected_models)
 
-    print("🎉 实验配置完成！")
-    print("   要实际运行此实验，请在有足够GPU内存的服务器上执行此脚本")
+    print("🎉 DistilBERT + TIM 实验配置完成！")
+    print("   已修复模型兼容性和数据处理问题")
 
 
 if __name__ == "__main__":
