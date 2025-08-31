@@ -127,8 +127,8 @@ class BertTimExperiment:
             f"📊 数据规模: 训练={self.train_count}, 验证={self.valid_count}, 测试={self.test_count}"
         )
 
-        # 使用DataFetcher加载IMDB数据集
-        fetcher = DataFetcher(
+        # 使用DataFetcher.setup加载IMDB数据集，并指定数据分割
+        fetcher = DataFetcher.setup(
             dataset_name=self.dataset_name,
             train_count=self.train_count,
             valid_count=self.valid_count,
