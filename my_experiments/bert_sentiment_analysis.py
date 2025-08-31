@@ -166,12 +166,24 @@ class BertTimExperiment:
             num_train_layers=2,  # 微调最后2层
         )
 
-        # 暂时使用CPU避免设备问题
-        device = torch.device("cpu")
+        # 智能设备选择，优先GPU
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            print("🚀 使用CUDA GPU加速")
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+            print("🍎 使用Apple Silicon MPS加速")
+            # MPS优化设置
+            import os
+            os.environ['PYTORCH_MPS_HIGH_WATERMARK_RATIO'] = '0.0'
+        else:
+            device = torch.device("cpu")
+            print("💻 使用CPU (未检测到GPU)")
+            
         model = model.to(device)
 
         print(f"🤖 创建模型: {model_config['description']}")
-        print(f"📍 设备: {device} (强制CPU以避免设备问题)")
+        print(f"📍 设备: {device}")
 
         return model
 
@@ -249,6 +261,15 @@ class BertTimExperiment:
             train_attention_mask = train_dataset.tensors[1]  
             valid_input_ids = valid_dataset.tensors[0]
             valid_attention_mask = valid_dataset.tensors[1]
+            
+            # 确保数据在正确的设备上
+            device = model.bert.device
+            train_input_ids = train_input_ids.to(device)
+            train_attention_mask = train_attention_mask.to(device)
+            valid_input_ids = valid_input_ids.to(device)
+            valid_attention_mask = valid_attention_mask.to(device)
+            y_train = y_train.to(device)
+            y_valid = y_valid.to(device)
             
             # 为TIM创建简化的tensor输入（转换为float以支持梯度计算）
             tim_evaluator.input_data(
@@ -366,8 +387,11 @@ class BertTimExperiment:
         min_influence = float(np.min(data_values))
         max_influence = float(np.max(data_values))
 
-        # 按类别分析影响力
-        y_train_np = y_train.numpy() if isinstance(y_train, torch.Tensor) else y_train
+        # 按类别分析影响力 - 确保tensor在CPU上
+        if isinstance(y_train, torch.Tensor):
+            y_train_np = y_train.cpu().numpy()
+        else:
+            y_train_np = y_train
 
         positive_indices = np.where(y_train_np == 1)[0]
         negative_indices = np.where(y_train_np == 0)[0]
