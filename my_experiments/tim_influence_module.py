@@ -33,9 +33,9 @@ class BertTimInfluenceCalculator:
         Parameters:
         -----------
         t1 : int
-            时间窗口开始步骤，默认0
+            Time window start STEP (not epoch), default 0
         t2 : Optional[int]
-            时间窗口结束步骤，None表示到结束（T）
+            Time window end STEP (not epoch), None means to end (T)
         num_epochs : int
             训练轮数，默认3
         batch_size : int
@@ -61,9 +61,9 @@ class BertTimInfluenceCalculator:
         
     def setup_tim_evaluator(self) -> TimInfluence:
         """设置TIM评估器"""
-        print(f"⚙️  设置TIM评估器")
-        print(f"   时间窗口: t1={self.t1}, t2={'T(end)' if self.t2 is None else self.t2}")
-        print(f"   训练配置: epochs={self.num_epochs}, batch_size={self.batch_size}")
+        print(f"⚙️  Setting up TIM evaluator")
+        print(f"   Time window (steps): t1={self.t1}, t2={'T(end)' if self.t2 is None else self.t2}")
+        print(f"   Training config: epochs={self.num_epochs}, batch_size={self.batch_size}")
         
         self.tim_evaluator = TimInfluence(
             start_step=self.t1,

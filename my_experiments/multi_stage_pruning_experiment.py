@@ -143,9 +143,13 @@ class MultiStagePruningExperiment:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Calculate time windows for stages
-        total_epochs = epochs
-        self.time_windows = self._calculate_time_windows(total_epochs, num_stages)
+        # Calculate time windows for stages (based on steps, not epochs)
+        self.time_windows = self._calculate_time_windows(
+            total_epochs=epochs, 
+            num_stages=num_stages,
+            batch_size=batch_size,
+            train_count=train_count
+        )
         
         # Initialize components
         self.data_processor = None
@@ -166,9 +170,9 @@ class MultiStagePruningExperiment:
             "error_log": [],
         }
 
-    def _calculate_time_windows(self, total_epochs: int, num_stages: int) -> List[Tuple[int, Optional[int]]]:
+    def _calculate_time_windows(self, total_epochs: int, num_stages: int, batch_size: int = 16, train_count: int = 1000) -> List[Tuple[int, Optional[int]]]:
         """
-        Calculate time windows for each stage
+        Calculate time windows for each stage based on training STEPS (not epochs)
         
         Parameters:
         -----------
@@ -176,33 +180,56 @@ class MultiStagePruningExperiment:
             Total number of training epochs
         num_stages : int
             Number of stages to divide training into
+        batch_size : int
+            Batch size for calculating steps per epoch
+        train_count : int
+            Number of training samples
             
         Returns:
         --------
         List[Tuple[int, Optional[int]]]
-            List of (start_epoch, end_epoch) tuples for each stage
+            List of (start_step, end_step) tuples for each stage
         """
-        # Divide epochs evenly across stages
-        epochs_per_stage = total_epochs // num_stages
-        remainder = total_epochs % num_stages
+        # Calculate total training steps
+        steps_per_epoch = (train_count + batch_size - 1) // batch_size  # Ceiling division
+        total_steps = total_epochs * steps_per_epoch
+        
+        print(f"📊 Time window calculation:")
+        print(f"   Training samples: {train_count}")
+        print(f"   Batch size: {batch_size}")
+        print(f"   Steps per epoch: {steps_per_epoch}")
+        print(f"   Total epochs: {total_epochs}")
+        print(f"   Total steps: {total_steps}")
+        
+        # Divide steps evenly across stages
+        steps_per_stage = total_steps // num_stages
+        remainder_steps = total_steps % num_stages
         
         time_windows = []
-        current_epoch = 0
+        current_step = 0
         
         for stage in range(num_stages):
-            start_epoch = current_epoch
+            start_step = current_step
             
-            # Add remainder epochs to early stages
-            stage_epochs = epochs_per_stage + (1 if stage < remainder else 0)
-            end_epoch = current_epoch + stage_epochs
+            # Add remainder steps to early stages
+            stage_steps = steps_per_stage + (1 if stage < remainder_steps else 0)
+            end_step = current_step + stage_steps - 1  # End step is inclusive
             
             # For the last stage, end at T (None)
             if stage == num_stages - 1:
-                time_windows.append((start_epoch, None))  # [t4, T]
+                time_windows.append((start_step, None))  # [t4, T]
             else:
-                time_windows.append((start_epoch, end_epoch))
+                time_windows.append((start_step, end_step))
                 
-            current_epoch = end_epoch
+            current_step = end_step + 1  # Next stage starts after current end
+            
+        # Print time windows for verification
+        print(f"   Time windows (steps):")
+        for i, (start, end) in enumerate(time_windows, 1):
+            end_desc = "T" if end is None else str(end)
+            steps_in_window = (total_steps - start) if end is None else (end - start + 1)
+            epochs_equiv = steps_in_window / steps_per_epoch
+            print(f"     Stage {i}: [{start}, {end_desc}] - {steps_in_window} steps (~{epochs_equiv:.1f} epochs)")
             
         return time_windows
 
@@ -366,8 +393,8 @@ class MultiStagePruningExperiment:
         try:
             # 1. Create TIM calculator for this stage
             tim_calculator = create_tim_calculator(
-                t1=start_epoch,
-                t2=end_epoch,
+                t1=start_epoch,  # start_step
+                t2=end_epoch,    # end_step  
                 num_epochs=self.config["epochs"],
                 batch_size=self.config["tim_batch_size"],
                 regularization=self.config["regularization"],
@@ -542,10 +569,14 @@ class MultiStagePruningExperiment:
             )
             
             # 5. Time window diagram
+            # Calculate total steps for diagram
+            steps_per_epoch = (self.config["train_count"] + self.config["batch_size"] - 1) // self.config["batch_size"]
+            total_steps = self.config["epochs"] * steps_per_epoch
+            
             self.visualizer.plot_time_window_diagram(
                 self.time_windows,
-                self.config["epochs"],
-                title="Training Time Windows Division",
+                total_steps,
+                title="Training Time Windows Division (Steps)",
                 save_name="time_window_diagram.png"
             )
             

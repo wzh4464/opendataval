@@ -22,12 +22,14 @@ def main():
     
     print("🚀 Multi-Stage TIM Influence Data Pruning Experiment")
     print("=" * 80)
-    print("This experiment divides training into 5 time windows:")
-    print("Stage 1: [0, t1] - Early training phase")  
-    print("Stage 2: [t1, t2] - Initial convergence")
-    print("Stage 3: [t2, t3] - Mid training")
-    print("Stage 4: [t3, t4] - Late training") 
-    print("Stage 5: [t4, T] - Final convergence")
+    print("This experiment divides training into 5 time windows based on TRAINING STEPS:")
+    print("Stage 1: [0, t1] - Early training steps")  
+    print("Stage 2: [t1, t2] - Initial convergence steps")
+    print("Stage 3: [t2, t3] - Mid training steps")
+    print("Stage 4: [t3, t4] - Late training steps") 
+    print("Stage 5: [t4, T] - Final convergence steps")
+    print("\nIMPORTANT: Time windows are based on training STEPS, not epochs!")
+    print("Each step corresponds to one batch gradient update.")
     print("\nFor each stage, we:")
     print("1. Compute TIM influence scores for that time window")
     print("2. Prune low-influence samples")
@@ -68,11 +70,21 @@ def main():
     print(f"   Pruning ratio: {experiment.config['prune_ratio']*100:.1f}%")
     print(f"   Output directory: {experiment.config['output_dir']}")
     
-    print(f"\n⏰ TIME WINDOW BREAKDOWN:")
+    print(f"\n⏰ TIME WINDOW BREAKDOWN (STEPS):")
+    # Calculate steps per epoch for display
+    batch_size = experiment.config['batch_size']
+    train_count = experiment.config['train_count'] 
+    steps_per_epoch = (train_count + batch_size - 1) // batch_size
+    
     for i, (start, end) in enumerate(experiment.time_windows, 1):
         end_desc = "T" if end is None else str(end)
-        epochs_in_window = (experiment.config['epochs'] if end is None else end) - start
-        print(f"   Stage {i}: [{start}, {end_desc}] - {epochs_in_window} epochs")
+        if end is None:
+            total_steps = experiment.config['epochs'] * steps_per_epoch
+            steps_in_window = total_steps - start
+        else:
+            steps_in_window = end - start + 1
+        epochs_equiv = steps_in_window / steps_per_epoch
+        print(f"   Stage {i}: [{start}, {end_desc}] - {steps_in_window} steps (~{epochs_equiv:.1f} epochs)")
     
     # Confirm start
     print(f"\n🔍 EXPERIMENT OVERVIEW:")

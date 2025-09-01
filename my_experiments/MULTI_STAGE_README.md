@@ -4,13 +4,15 @@ This experiment implements a comprehensive multi-stage approach to TIM (Time-var
 
 ## Overview
 
-The experiment divides the training process into **5 time windows** and performs TIM influence computation and data cleaning for each stage:
+The experiment divides the training process into **5 time windows based on training STEPS** and performs TIM influence computation and data cleaning for each stage:
 
-- **Stage 1**: `[0, t1]` - Early training phase
-- **Stage 2**: `[t1, t2]` - Initial convergence
-- **Stage 3**: `[t2, t3]` - Mid training
-- **Stage 4**: `[t3, t4]` - Late training  
-- **Stage 5**: `[t4, T]` - Final convergence
+- **Stage 1**: `[0, t1]` - Early training steps
+- **Stage 2**: `[t1, t2]` - Initial convergence steps
+- **Stage 3**: `[t2, t3]` - Mid training steps
+- **Stage 4**: `[t3, t4]` - Late training steps  
+- **Stage 5**: `[t4, T]` - Final convergence steps
+
+**IMPORTANT**: Time windows are based on training **steps** (batch gradient updates), not epochs!
 
 For each stage, the experiment:
 1. Computes TIM influence scores for that specific time window
@@ -96,16 +98,22 @@ results = experiment.run_complete_experiment()
 
 ### Time Window Calculation
 
-The experiment automatically divides the total training epochs into equal time windows:
+The experiment automatically divides the total training steps into equal time windows:
+
+**Example**: 1000 samples, batch size 16, 10 epochs
+- Steps per epoch = ceil(1000/16) = 63
+- Total steps = 10 × 63 = 630 steps
+- 5 stages = 126 steps per stage
 
 ```
-Total epochs = 10, Stages = 5
-Stage 1: [0, 2]   - Epochs 0-2
-Stage 2: [2, 4]   - Epochs 2-4  
-Stage 3: [4, 6]   - Epochs 4-6
-Stage 4: [6, 8]   - Epochs 6-8
-Stage 5: [8, T]   - Epochs 8-10 (to end)
+Stage 1: [0, 125]     - Steps 0-125   (~2.0 epochs)
+Stage 2: [126, 251]   - Steps 126-251 (~2.0 epochs)
+Stage 3: [252, 377]   - Steps 252-377 (~2.0 epochs)  
+Stage 4: [378, 503]   - Steps 378-503 (~2.0 epochs)
+Stage 5: [504, T]     - Steps 504-630 (~2.0 epochs)
 ```
+
+**Key Point**: Time windows are measured in **training steps**, not epochs. Each step represents one batch gradient update.
 
 ## Generated Outputs
 

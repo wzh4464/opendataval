@@ -437,8 +437,8 @@ class MultiStageVisualizer:
     def plot_time_window_diagram(
         self,
         time_windows: List[Tuple[int, Optional[int]]],
-        total_epochs: int,
-        title: str = "Training Time Windows Division",
+        total_steps: int,
+        title: str = "Training Time Windows Division (Steps)",
         save_name: str = "time_window_diagram.png"
     ):
         """
@@ -447,9 +447,9 @@ class MultiStageVisualizer:
         Parameters:
         -----------
         time_windows : List[Tuple[int, Optional[int]]]
-            List of (start_epoch, end_epoch) tuples
-        total_epochs : int
-            Total number of epochs
+            List of (start_step, end_step) tuples
+        total_steps : int
+            Total number of training steps
         title : str
             Plot title
         save_name : str
@@ -461,47 +461,49 @@ class MultiStageVisualizer:
         fig.suptitle(title, fontsize=16, fontweight='bold')
         
         # Create timeline
-        timeline = np.arange(total_epochs + 1)
+        timeline = np.arange(0, total_steps + 1, max(1, total_steps // 100))
         
         # Draw main timeline
-        ax.plot(timeline, [0.5] * len(timeline), 'k-', linewidth=3, alpha=0.3)
+        ax.plot([0, total_steps], [0.5, 0.5], 'k-', linewidth=3, alpha=0.3)
         
         # Mark time windows
         for i, (start, end) in enumerate(time_windows):
-            end_epoch = total_epochs if end is None else end
-            window_range = np.arange(start, end_epoch + 1)
+            end_step = total_steps if end is None else end
             color = self.colors['stage_colors'][i % len(self.colors['stage_colors'])]
             
-            ax.plot(window_range, [0.5] * len(window_range), 
+            # Draw window range as a thick line segment
+            ax.plot([start, end_step], [0.5, 0.5], 
                    color=color, linewidth=12, alpha=0.7,
                    label=f'Stage {i+1}: [{start}, {"T" if end is None else end}]')
             
             # Add stage labels
-            mid_point = (start + end_epoch) / 2
+            mid_point = (start + end_step) / 2
             ax.text(mid_point, 0.65, f'S{i+1}', ha='center', va='center', 
                    fontweight='bold', fontsize=14, 
                    bbox=dict(boxstyle="circle,pad=0.3", facecolor='white', edgecolor=color, linewidth=2))
             
-            # Add epoch range labels
-            ax.text(mid_point, 0.35, f'[{start}, {"T" if end is None else end}]', 
+            # Add step range labels
+            steps_in_window = end_step - start + 1 if end is not None else total_steps - start
+            ax.text(mid_point, 0.35, f'{steps_in_window} steps', 
                    ha='center', va='center', fontsize=10, fontweight='bold')
         
-        # Mark epoch boundaries
-        for epoch in range(0, total_epochs + 1, max(1, total_epochs // 10)):
-            ax.axvline(epoch, color='gray', linestyle=':', alpha=0.5)
-            ax.text(epoch, 0.2, str(epoch), ha='center', va='top', fontsize=9)
+        # Mark step boundaries (show every 10% of total steps)
+        step_markers = range(0, total_steps + 1, max(1, total_steps // 10))
+        for step in step_markers:
+            ax.axvline(step, color='gray', linestyle=':', alpha=0.5)
+            ax.text(step, 0.2, str(step), ha='center', va='top', fontsize=9, rotation=45)
         
-        ax.set_xlabel('Training Epoch')
-        ax.set_xlim(-0.5, total_epochs + 0.5)
+        ax.set_xlabel('Training Step')
+        ax.set_xlim(-total_steps*0.02, total_steps*1.02)
         ax.set_ylim(0.1, 0.8)
         ax.set_yticks([])
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), ncol=len(time_windows))
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=min(len(time_windows), 3))
         ax.grid(True, axis='x', alpha=0.3)
         
-        # Add epoch markers
-        ax.text(-0.3, 0.5, '0', ha='center', va='center', fontweight='bold', fontsize=12,
+        # Add step markers
+        ax.text(-total_steps*0.01, 0.5, '0', ha='center', va='center', fontweight='bold', fontsize=12,
                bbox=dict(boxstyle="round,pad=0.3", facecolor='lightblue'))
-        ax.text(total_epochs + 0.3, 0.5, 'T', ha='center', va='center', fontweight='bold', fontsize=12,
+        ax.text(total_steps*1.01, 0.5, 'T', ha='center', va='center', fontweight='bold', fontsize=12,
                bbox=dict(boxstyle="round,pad=0.3", facecolor='lightcoral'))
         
         plt.tight_layout()
