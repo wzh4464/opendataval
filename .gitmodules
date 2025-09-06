@@ -1,0 +1,3 @@
+[submodule "TextAttack"]
+	path = TextAttack
+	url = https://github.com/QData/TextAttack.git
