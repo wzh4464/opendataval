@@ -286,6 +286,7 @@ class MultiStageVisualizer:
         self,
         original_history: Dict,
         stage_results: List[Dict],
+        cleaned_history: Dict = None,
         title: str = "Training Loss Curves: Original vs Multi-Stage Pruned Models",
         save_name: str = "training_curves_comparison.png"
     ):
@@ -298,6 +299,8 @@ class MultiStageVisualizer:
             Original model training history
         stage_results : List[Dict]
             List of stage results
+        cleaned_history : Dict, optional
+            Harmful sample removal training history
         title : str
             Plot title
         save_name : str
@@ -314,6 +317,13 @@ class MultiStageVisualizer:
             ax1.plot(epochs, original_history['train_loss'], 
                     color=self.colors['warning'], linewidth=3, 
                     label='Original (Noisy)', alpha=0.8)
+        
+        # Plot harmful sample removal curve if available
+        if cleaned_history and 'train_loss' in cleaned_history:
+            epochs = range(1, len(cleaned_history['train_loss']) + 1)
+            ax1.plot(epochs, cleaned_history['train_loss'], 
+                    color=self.colors['success'], linewidth=3, 
+                    label='Harmful Removal', alpha=0.8)
         
         # Plot pruned training curves for each stage
         for i, stage in enumerate(stage_results):
@@ -340,6 +350,13 @@ class MultiStageVisualizer:
             ax2.plot(epochs, original_history['train_accuracy'], 
                     color=self.colors['warning'], linewidth=3, 
                     label='Original (Noisy)', alpha=0.8)
+        
+        # Plot harmful sample removal curve if available
+        if cleaned_history and 'train_accuracy' in cleaned_history:
+            epochs = range(1, len(cleaned_history['train_accuracy']) + 1)
+            ax2.plot(epochs, cleaned_history['train_accuracy'], 
+                    color=self.colors['success'], linewidth=3, 
+                    label='Harmful Removal', alpha=0.8)
         
         for i, stage in enumerate(stage_results):
             hist = stage["training_results"]["pruned_history"]
