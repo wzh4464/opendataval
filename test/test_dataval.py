@@ -91,7 +91,6 @@ class TestDataEvaluatorDryRun(unittest.TestCase):
 
 
 # fmt: off
-# ruff: noqa: E501 D103
 # Dummy evaluators used for low iteration training, for testing
 RANDOM_STATE = set_random_state(10)  # Constant random state for testing
 

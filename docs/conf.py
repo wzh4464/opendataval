@@ -8,7 +8,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.abspath(".."))
-import opendataval  # noqa: E402
+import opendataval
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information

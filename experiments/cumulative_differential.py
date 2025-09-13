@@ -4,13 +4,13 @@
 
 实现将"只有全局分数"的估值方法转换为逐epoch的累积差分输出。
 
-核心思想：
+核心思想:
 - I(e): 将第e个epoch的检查点当作"最终模型"来计算全局影响力向量
 - ΔI(e) = I(e) - I(e-1): 第e轮的新增贡献 (I(-1) = 0向量)
 - 输出CSV: 每列influence_epoch_e填ΔI(e)
 - 望远镜求和: 所有列相加应等于最终影响力I(E)
 
-支持所有全局分数估值方法：LAVA、KNNShapley、InfluenceFunction等
+支持所有全局分数估值方法: LAVA、KNNShapley、InfluenceFunction等
 """
 
 from __future__ import annotations
@@ -28,10 +28,10 @@ from sklearn.utils import check_random_state
 
 from opendataval.dataloader import DataFetcher
 from opendataval.dataval.api import DataEvaluator
-from opendataval.dataval.lava import LavaEvaluator
-from opendataval.dataval.knnshap import KNNShapley
 from opendataval.dataval.influence import InfluenceFunction
-from opendataval.model import Model, BertClassifier
+from opendataval.dataval.knnshap import KNNShapley
+from opendataval.dataval.lava import LavaEvaluator
+from opendataval.model import BertClassifier, Model
 from opendataval.util import set_random_seed
 
 
@@ -46,8 +46,10 @@ class ModelCheckpointManager:
     def save_checkpoint(self, epoch: int, model_state: Dict[str, Any]):
         """保存指定epoch的模型状态"""
         # 深拷贝模型状态到CPU以节省GPU内存
-        checkpoint = {k: v.clone().cpu() if isinstance(v, torch.Tensor) else v
-                     for k, v in model_state.items()}
+        checkpoint = {
+            k: v.clone().cpu() if isinstance(v, torch.Tensor) else v
+            for k, v in model_state.items()
+        }
         self.checkpoints[epoch] = checkpoint
 
     def load_checkpoint(self, epoch: int) -> Model:
@@ -113,36 +115,47 @@ class CumulativeDifferentialEvaluator:
         batch_size: int = 32,
         lr: float = 1e-3,
         save_every: int = 1,
-        **train_kwargs
+        **train_kwargs,
     ) -> Model:
         """训练模型并保存检查点"""
         if self.checkpoint_manager is None:
             raise ValueError("Checkpoint manager not initialized")
 
-        print(f"🚀 开始训练 {epochs} 轮，每 {save_every} 轮保存检查点")
+        print(f"🚀 开始训练 {epochs} 轮, 每 {save_every} 轮保存检查点")
 
         # 保存初始状态 (epoch -1, 实际上是epoch 0的初始状态)
         self.checkpoint_manager.save_checkpoint(-1, model.state_dict())
 
         # 准备训练数据
         if isinstance(self.x_train, list):  # 文本数据
-            x_train_tensor = self.y_train  # 占位符，实际使用原始文本
+            _ = self.y_train  # 占位符, 实际使用原始文本
         else:
-            x_train_tensor = self.x_train
+            _ = self.x_train
 
         # 训练循环
         for epoch in range(epochs):
             print(f"  📈 训练 Epoch {epoch + 1}/{epochs}")
 
             # 执行一轮训练
-            if hasattr(model, 'fit_epoch'):
+            if hasattr(model, "fit_epoch"):
                 # 如果模型支持单epoch训练
-                model.fit_epoch(self.x_train, self.y_train,
-                               batch_size=batch_size, lr=lr, **train_kwargs)
+                model.fit_epoch(
+                    self.x_train,
+                    self.y_train,
+                    batch_size=batch_size,
+                    lr=lr,
+                    **train_kwargs,
+                )
             else:
                 # 否则训练1个epoch
-                model.fit(self.x_train, self.y_train,
-                         epochs=1, batch_size=batch_size, lr=lr, **train_kwargs)
+                model.fit(
+                    self.x_train,
+                    self.y_train,
+                    epochs=1,
+                    batch_size=batch_size,
+                    lr=lr,
+                    **train_kwargs,
+                )
 
             # 保存检查点
             if (epoch + 1) % save_every == 0:
@@ -164,7 +177,7 @@ class CumulativeDifferentialEvaluator:
 
         # 加载指定epoch的模型检查点
         if epoch == -1:
-            # 特殊情况：初始模型 (未训练)
+            # 特殊情况: 初始模型 (未训练)
             model_at_epoch = self.checkpoint_manager.load_checkpoint(-1)
         else:
             model_at_epoch = self.checkpoint_manager.load_checkpoint(epoch)
@@ -176,14 +189,15 @@ class CumulativeDifferentialEvaluator:
         evaluator.input_data(self.x_train, self.y_train, self.x_valid, self.y_valid)
 
         # 特殊处理不同类型的评估器
-        if hasattr(evaluator, 'embedding_model'):
+        if hasattr(evaluator, "embedding_model"):
             # ModelLessMixin (LAVA, KNNShapley)
             if isinstance(model_at_epoch, BertClassifier):
-                # 对于BERT模型，需要包装为嵌入模型
+                # 对于BERT模型, 需要包装为嵌入模型
                 from my_experiments.run_lava_bert import BertEmbeddingWrapper
+
                 embedding_model = BertEmbeddingWrapper(model_at_epoch, mode="pooled")
                 evaluator.embedding_model = embedding_model
-        elif hasattr(evaluator, 'pred_model'):
+        elif hasattr(evaluator, "pred_model"):
             # ModelMixin (InfluenceFunction)
             evaluator.pred_model = model_at_epoch
 
@@ -196,9 +210,7 @@ class CumulativeDifferentialEvaluator:
         return influence_scores
 
     def compute_cumulative_differential(
-        self,
-        epochs: List[int],
-        skip_missing: bool = True
+        self, epochs: List[int], skip_missing: bool = True
     ) -> Dict[int, np.ndarray]:
         """计算累积差分影响力"""
         print(f"📊 计算累积差分影响力: epochs {epochs}")
@@ -223,16 +235,18 @@ class CumulativeDifferentialEvaluator:
 
             # 计算差分
             if prev_influence is None:
-                # 第一个epoch：ΔI(e) = I(e) - 0
+                # 第一个epoch: ΔI(e) = I(e) - 0
                 diff = current_influence.copy()
             else:
-                # 后续epoch：ΔI(e) = I(e) - I(e-1)
+                # 后续epoch: ΔI(e) = I(e) - I(e-1)
                 diff = current_influence - prev_influence
 
             cumulative_diffs[epoch] = diff
             prev_influence = current_influence.copy()
 
-            print(f"    ✓ epoch {epoch}: 差分统计 mean={diff.mean():.6f}, std={diff.std():.6f}")
+            print(
+                f"    ✓ epoch {epoch}: 差分统计 mean={diff.mean():.6f}, std={diff.std():.6f}"
+            )
 
         return cumulative_diffs
 
@@ -240,7 +254,7 @@ class CumulativeDifferentialEvaluator:
         self,
         cumulative_diffs: Dict[int, np.ndarray],
         output_path: Path,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """将累积差分结果保存为CSV文件"""
         print(f"💾 保存结果到: {output_path}")
@@ -254,30 +268,30 @@ class CumulativeDifferentialEvaluator:
         epochs = sorted(cumulative_diffs.keys())
 
         # 写入CSV
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, "w", newline="") as f:
             writer = csv.writer(f)
 
             # 写入header
-            headers = [f'influence_epoch_{e}' for e in epochs]
+            headers = [f"influence_epoch_{e}" for e in epochs]
             writer.writerow(headers)
 
-            # 写入数据 (按样本行，按epoch列)
+            # 写入数据 (按样本行, 按epoch列)
             for i in range(n_samples):
                 row = [cumulative_diffs[epoch][i] for epoch in epochs]
                 writer.writerow(row)
 
         # 保存元数据
         if metadata:
-            metadata_path = output_path.with_suffix('.json')
+            metadata_path = output_path.with_suffix(".json")
             metadata_full = {
-                'epochs': epochs,
-                'n_samples': n_samples,
-                'evaluator_class': self.evaluator_class.__name__,
-                'evaluator_kwargs': self.evaluator_kwargs,
-                **metadata
+                "epochs": epochs,
+                "n_samples": n_samples,
+                "evaluator_class": self.evaluator_class.__name__,
+                "evaluator_kwargs": self.evaluator_kwargs,
+                **metadata,
             }
 
-            with open(metadata_path, 'w') as f:
+            with open(metadata_path, "w") as f:
                 json.dump(metadata_full, f, indent=2, default=str)
 
         print(f"✅ 保存完成: {len(epochs)} 个epoch, {n_samples} 个样本")
@@ -286,9 +300,9 @@ class CumulativeDifferentialEvaluator:
         self,
         cumulative_diffs: Dict[int, np.ndarray],
         final_epoch: int,
-        tolerance: float = 1e-6
+        tolerance: float = 1e-6,
     ) -> bool:
-        """验证望远镜求和：所有差分相加应等于最终影响力"""
+        """验证望远镜求和: 所有差分相加应等于最终影响力"""
         print(f"🔍 验证望远镜求和 (tolerance={tolerance})")
 
         # 计算最终影响力
@@ -309,7 +323,9 @@ class CumulativeDifferentialEvaluator:
 
         print(f"  📏 最大差异: {max_diff:.10f}")
         print(f"  📊 平均差异: {mean_diff:.10f}")
-        print(f"  {'✅' if is_valid else '❌'} 望远镜求和{'通过' if is_valid else '失败'}")
+        print(
+            f"  {'✅' if is_valid else '❌'} 望远镜求和{'通过' if is_valid else '失败'}"
+        )
 
         return is_valid
 
@@ -317,12 +333,12 @@ class CumulativeDifferentialEvaluator:
 def create_evaluator_from_config(config: Dict[str, Any]) -> Type[DataEvaluator]:
     """根据配置创建评估器类"""
     evaluator_map = {
-        'lava': LavaEvaluator,
-        'knnshapley': KNNShapley,
-        'influence': InfluenceFunction,
+        "lava": LavaEvaluator,
+        "knnshapley": KNNShapley,
+        "influence": InfluenceFunction,
     }
 
-    evaluator_name = config['name'].lower()
+    evaluator_name = config["name"].lower()
     if evaluator_name not in evaluator_map:
         raise ValueError(f"Unknown evaluator: {evaluator_name}")
 
@@ -330,63 +346,65 @@ def create_evaluator_from_config(config: Dict[str, Any]) -> Type[DataEvaluator]:
 
 
 def main():
-    """主函数：累积差分数据价值评估CLI"""
+    """主函数: 累积差分数据价值评估CLI"""
     parser = argparse.ArgumentParser(
         description="累积差分数据价值评估",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     # 数据集配置
-    parser.add_argument("--dataset", default="imdb",
-                       help="数据集名称")
-    parser.add_argument("--train-count", type=int, default=1000,
-                       help="训练样本数")
-    parser.add_argument("--valid-count", type=int, default=200,
-                       help="验证样本数")
-    parser.add_argument("--test-count", type=int, default=200,
-                       help="测试样本数")
+    parser.add_argument("--dataset", default="imdb", help="数据集名称")
+    parser.add_argument("--train-count", type=int, default=1000, help="训练样本数")
+    parser.add_argument("--valid-count", type=int, default=200, help="验证样本数")
+    parser.add_argument("--test-count", type=int, default=200, help="测试样本数")
 
     # 模型配置
-    parser.add_argument("--model", default="bert",
-                       choices=["bert", "mlp", "logistic"],
-                       help="模型类型")
-    parser.add_argument("--pretrained-model",
-                       default="distilbert-base-uncased",
-                       help="预训练模型名称(仅BERT)")
+    parser.add_argument(
+        "--model", default="bert", choices=["bert", "mlp", "logistic"], help="模型类型"
+    )
+    parser.add_argument(
+        "--pretrained-model",
+        default="distilbert-base-uncased",
+        help="预训练模型名称(仅BERT)",
+    )
 
     # 训练配置
-    parser.add_argument("--epochs", type=int, default=5,
-                       help="训练轮数")
-    parser.add_argument("--batch-size", type=int, default=16,
-                       help="批量大小")
-    parser.add_argument("--lr", type=float, default=2e-5,
-                       help="学习率")
-    parser.add_argument("--save-every", type=int, default=1,
-                       help="每几轮保存检查点")
+    parser.add_argument("--epochs", type=int, default=5, help="训练轮数")
+    parser.add_argument("--batch-size", type=int, default=16, help="批量大小")
+    parser.add_argument("--lr", type=float, default=2e-5, help="学习率")
+    parser.add_argument("--save-every", type=int, default=1, help="每几轮保存检查点")
 
     # 评估器配置
-    parser.add_argument("--evaluator", default="lava",
-                       choices=["lava", "knnshapley", "influence"],
-                       help="数据价值评估方法")
-    parser.add_argument("--embedding-mode", default="pooled",
-                       choices=["pooled", "logits", "probs"],
-                       help="嵌入模式(仅LAVA)")
+    parser.add_argument(
+        "--evaluator",
+        default="lava",
+        choices=["lava", "knnshapley", "influence"],
+        help="数据价值评估方法",
+    )
+    parser.add_argument(
+        "--embedding-mode",
+        default="pooled",
+        choices=["pooled", "logits", "probs"],
+        help="嵌入模式(仅LAVA)",
+    )
 
     # 输出配置
-    parser.add_argument("--output-dir",
-                       default="./results/cumulative_differential",
-                       help="输出目录")
-    parser.add_argument("--output-prefix", default="experiment",
-                       help="输出文件前缀")
+    parser.add_argument(
+        "--output-dir", default="./results/cumulative_differential", help="输出目录"
+    )
+    parser.add_argument("--output-prefix", default="experiment", help="输出文件前缀")
 
     # 其他配置
-    parser.add_argument("--device", default="auto",
-                       choices=["auto", "cuda", "mps", "cpu"],
-                       help="设备选择")
-    parser.add_argument("--seed", type=int, default=42,
-                       help="随机种子")
-    parser.add_argument("--skip-missing-checkpoints", action="store_true",
-                       help="跳过缺失的检查点")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cuda", "mps", "cpu"],
+        help="设备选择",
+    )
+    parser.add_argument("--seed", type=int, default=42, help="随机种子")
+    parser.add_argument(
+        "--skip-missing-checkpoints", action="store_true", help="跳过缺失的检查点"
+    )
 
     args = parser.parse_args()
 
@@ -401,7 +419,7 @@ def main():
     else:
         device = torch.device(args.device)
 
-    print(f"🚀 累积差分数据价值评估")
+    print("🚀 累积差分数据价值评估")
     print(f"  设备: {device}")
     print(f"  数据集: {args.dataset}")
     print(f"  模型: {args.model}")
@@ -431,10 +449,10 @@ def main():
     if args.model == "bert":
         model = BertClassifier(
             pretrained_model_name=args.pretrained_model,
-            num_classes=fetcher.label_dim[0]
+            num_classes=fetcher.label_dim[0],
         ).to(device)
         # 处理文本数据格式
-        if hasattr(x_train, 'dataset'):
+        if hasattr(x_train, "dataset"):
             x_train = [x_train.dataset[i] for i in x_train.indices]
             x_valid = [x_valid.dataset[i] for i in x_valid.indices]
     else:
@@ -470,7 +488,7 @@ def main():
 
     # 训练模型并保存检查点
     print("🏋️  训练模型...")
-    trained_model = cd_evaluator.train_with_checkpoints(
+    cd_evaluator.train_with_checkpoints(
         model=model,
         epochs=args.epochs,
         batch_size=args.batch_size,
@@ -483,8 +501,7 @@ def main():
     print(f"📊 可用检查点: {available_epochs}")
 
     cumulative_diffs = cd_evaluator.compute_cumulative_differential(
-        epochs=available_epochs,
-        skip_missing=args.skip_missing_checkpoints
+        epochs=available_epochs, skip_missing=args.skip_missing_checkpoints
     )
 
     # 验证望远镜求和
@@ -492,7 +509,10 @@ def main():
     cd_evaluator.verify_telescope_sum(cumulative_diffs, final_epoch)
 
     # 保存结果
-    output_file = output_dir / f"{args.output_prefix}_{args.dataset}_{args.evaluator}_seed{args.seed}.csv"
+    output_file = (
+        output_dir
+        / f"{args.output_prefix}_{args.dataset}_{args.evaluator}_seed{args.seed}.csv"
+    )
     metadata = {
         "args": vars(args),
         "device": str(device),

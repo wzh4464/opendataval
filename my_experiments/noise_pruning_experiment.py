@@ -2,10 +2,10 @@
 """
 噪声数据剪枝实验主脚本
 
-完整的BERT + TIM噪声数据影响力分析和剪枝实验流程：
+完整的BERT + TIM噪声数据影响力分析和剪枝实验流程:
 1. 加载干净数据
 2. 注入30%标签噪声
-3. 训练BERT模型，记录损失曲线和[0,T]影响力分数
+3. 训练BERT模型, 记录损失曲线和[0,T]影响力分数
 4. 移除影响力最低的30%样本
 5. 用相同初始化重新训练
 6. 对比分析性能和收敛性
@@ -70,51 +70,51 @@ class NoisePruningExperiment:
         Parameters:
         -----------
         dataset_name : str
-            数据集名称，默认"imdb"
+            数据集名称, 默认"imdb"
         train_count : int
-            训练样本数，默认1000
+            训练样本数, 默认1000
         valid_count : int
-            验证样本数，默认200
+            验证样本数, 默认200
         test_count : int
-            测试样本数，默认200
+            测试样本数, 默认200
         noise_rate : float
-            标签噪声比例，默认0.3 (30%)
+            标签噪声比例, 默认0.3 (30%)
         model_name : str
-            BERT模型名称，默认"distilbert-base-uncased"
+            BERT模型名称, 默认"distilbert-base-uncased"
         num_classes : int
-            分类类别数，默认2
+            分类类别数, 默认2
         dropout_rate : float
-            Dropout率，默认0.2
+            Dropout率, 默认0.2
         num_train_layers : int
-            微调层数，默认2
+            微调层数, 默认2
         epochs : int
-            训练轮数，默认5
+            训练轮数, 默认5
         batch_size : int
-            批次大小，默认16
+            批次大小, 默认16
         learning_rate : float
-            学习率，默认2e-5
+            学习率, 默认2e-5
         tim_epochs : int
-            TIM训练轮数，默认3
+            TIM训练轮数, 默认3
         tim_batch_size : int
-            TIM批次大小，默认8
+            TIM批次大小, 默认8
         t1 : int
-            TIM时间窗口开始，默认0
+            TIM时间窗口开始, 默认0
         t2 : Optional[int]
-            TIM时间窗口结束，默认None (到结束)
+            TIM时间窗口结束, 默认None (到结束)
         regularization : float
-            L2正则化，默认0.01
+            L2正则化, 默认0.01
         finite_diff_eps : float
-            有限差分参数，默认1e-5
+            有限差分参数, 默认1e-5
         prune_ratio : float
-            剪枝比例，默认0.3 (30%)
+            剪枝比例, 默认0.3 (30%)
         random_state : int
-            随机种子，默认42
+            随机种子, 默认42
         device : str
-            计算设备，默认"auto"
+            计算设备, 默认"auto"
         output_dir : str
-            结果保存目录，默认"./noise_pruning_results"
+            结果保存目录, 默认"./noise_pruning_results"
         save_plots : bool
-            是否保存图表，默认True
+            是否保存图表, 默认True
         """
 
         # 保存所有配置
@@ -257,8 +257,8 @@ class NoisePruningExperiment:
             raise
 
     def train_original_model(self, data: Dict) -> Dict:
-        """训练原始（含噪声）模型"""
-        print("🚀 训练原始（含噪声）模型...")
+        """训练原始 (含噪声) 模型"""
+        print("🚀 训练原始 (含噪声) 模型...")
 
         try:
             # 创建模型
@@ -407,7 +407,7 @@ class NoisePruningExperiment:
 
     def train_pruned_model(self, pruned_data: Dict, initial_state: Dict) -> Dict:
         """用相同初始化训练剪枝后的模型"""
-        print("🚀 训练剪枝后模型（相同初始化）...")
+        print("🚀 训练剪枝后模型 (相同初始化) ...")
 
         try:
             # 创建新模型并加载相同的初始状态
@@ -460,7 +460,7 @@ class NoisePruningExperiment:
     ):
         """创建可视化图表"""
         if not self.config["save_plots"] or self.visualizer is None:
-            print("⏭️  跳过可视化（save_plots=False）")
+            print("⏭️  跳过可视化 (save_plots=False) ")
             return
 
         print("🎨 创建可视化图表...")
@@ -471,7 +471,7 @@ class NoisePruningExperiment:
             # 1. 原始训练曲线
             self.visualizer.plot_training_curves(
                 original_history,
-                title="原始（含噪声）训练曲线",
+                title="原始 (含噪声) 训练曲线",
                 save_name="original_training_curves.png",
             )
 
@@ -570,7 +570,7 @@ class NoisePruningExperiment:
             self.results["status"] = "success"
             self.results["end_time"] = time.time()
 
-            print("🎉 实验完成！")
+            print("🎉 实验完成! ")
             self.print_experiment_summary()
 
             return self.results
@@ -622,14 +622,16 @@ class NoisePruningExperiment:
                     - pruned_final.get("total_time", 0),
                 },
                 "convergence_analysis": {
-                    "original_final_epoch_loss": original_history.get("train_loss", [])[
-                        -1
-                    ]
-                    if original_history.get("train_loss")
-                    else 0,
-                    "pruned_final_epoch_loss": pruned_history.get("train_loss", [])[-1]
-                    if pruned_history.get("train_loss")
-                    else 0,
+                    "original_final_epoch_loss": (
+                        original_history.get("train_loss", [])[-1]
+                        if original_history.get("train_loss")
+                        else 0
+                    ),
+                    "pruned_final_epoch_loss": (
+                        pruned_history.get("train_loss", [])[-1]
+                        if pruned_history.get("train_loss")
+                        else 0
+                    ),
                 },
             }
 
@@ -811,7 +813,7 @@ def main():
 if __name__ == "__main__":
     success = main()
     if success and success.get("status") == "success":
-        print("\\n🎉 实验成功完成！")
+        print("\\n🎉 实验成功完成! ")
         sys.exit(0)
     else:
         print("\\n❌ 实验失败")

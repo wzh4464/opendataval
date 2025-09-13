@@ -19,7 +19,6 @@ from opendataval.model import Model
 from opendataval.util import StrEnum
 
 # fmt: off
-# ruff: noqa: E501 D103
 
 # Enums for better types, used with typer for better CLI
 DatasetsEnum = StrEnum("Datasets", list(Register.Datasets))

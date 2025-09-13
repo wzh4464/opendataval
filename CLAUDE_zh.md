@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-OpenDataVal是一个用于数据估值算法的统一基准库。这是一个Python库，为图像、自然语言处理和表格数据提供标准化数据集、数据估值方法和评估任务。
+OpenDataVal是一个用于数据估值算法的统一基准库。这是一个Python库, 为图像、自然语言处理和表格数据提供标准化数据集、数据估值方法和评估任务。
 
 ## 开发命令
 
@@ -14,7 +14,7 @@ OpenDataVal是一个用于数据估值算法的统一基准库。这是一个Pyt
 # 生产环境安装
 make install
 
-# 开发环境安装（包含pre-commit钩子）
+# 开发环境安装 (包含pre-commit钩子)
 make install-dev
 ```
 
@@ -50,7 +50,7 @@ python opendataval --file cli.csv -n [job_id] -o [path/to/output/]
 
 ## 架构和组件
 
-该库包含4个主要的交互组件：
+该库包含4个主要的交互组件:
 
 ### 1. DataFetcher (`opendataval.dataloader`) - 数据获取器
 
@@ -62,23 +62,23 @@ python opendataval --file cli.csv -n [job_id] -o [path/to/output/]
 ### 2. Model (`opendataval.model`) - 模型
 
 - 提供可训练的预测模型
-- 支持多种架构：LogisticRegression, MLP, LeNet, BERT
+- 支持多种架构: LogisticRegression, MLP, LeNet, BERT
 - 兼容scikit-learn模型
 - 模型遵循PyTorch风格的API (`fit`, `predict`)
 
 ### 3. DataEvaluator (`opendataval.dataval`) - 数据评估器
 
 - 实现不同的数据估值算法
-- 可用方法：AME, CS-Shapley, DVRL, 影响函数, KNN-Shapley, LAVA, Leave-One-Out, Random, 基于体积的方法
+- 可用方法: AME, CS-Shapley, DVRL, 影响函数, KNN-Shapley, LAVA, Leave-One-Out, Random, 基于体积的方法
 - 所有评估器继承自 `DataEvaluator` 基类
-- 通用模式：`evaluator.input_data().train_data_values().evaluate_data_values()`
+- 通用模式: `evaluator.input_data().train_data_values().evaluate_data_values()`
 
 ### 4. ExperimentMediator (`opendataval.experiment`) - 实验协调器
 
 - 跨多个数据评估器编排实验
 - 处理模型训练和评估
 - 提供绘图和非绘图实验方法
-- 工厂方法：`ExperimentMediator.model_factory_setup()`
+- 工厂方法: `ExperimentMediator.model_factory_setup()`
 
 ## 关键设计模式
 
@@ -111,9 +111,9 @@ eval_med = exper_med.compute_data_values([DataOob()])
 
 ## 代码质量标准
 
-- 使用ruff进行代码检查和格式化（行长度：88）
+- 使用ruff进行代码检查和格式化 (行长度: 88)
 - 遵循numpy文档字符串约定
-- 测试覆盖率目标：约75%
+- 测试覆盖率目标: 约75%
 - Pre-commit钩子强制代码质量
 - 支持Python 3.9-3.11
 
@@ -122,11 +122,11 @@ eval_med = exper_med.compute_data_values([DataOob()])
 - 测试文件位于 `test/` 目录
 - 使用pytest进行覆盖率报告
 - CI/CD在Ubuntu和Windows上运行测试
-- 可运行单个测试文件：`pytest test/test_specific.py`
+- 可运行单个测试文件: `pytest test/test_specific.py`
 
 ## 依赖项
 
-关键依赖项版本固定以保证稳定性：
+关键依赖项版本固定以保证稳定性:
 
 - PyTorch (~2.2.2) 用于深度学习模型
 - scikit-learn (~1.3) 用于传统机器学习
@@ -136,13 +136,13 @@ eval_med = exper_med.compute_data_values([DataOob()])
 
 ## 文档
 
-- 基于Sphinx的文档：<https://opendataval.github.io>
+- 基于Sphinx的文档: <https://opendataval.github.io>
 - 每个主要包目录中的README文件提供具体指导
 - `examples/` 目录中的示例演示使用模式
 
 ## 重要提示
 
-- 建议保持CLAUDE.md为英文版本，因为：
+- 建议保持CLAUDE.md为英文版本, 因为:
   - 编程命令和API都是英文的
   - 模型对英文技术文档处理更准确
   - 国际协作更方便

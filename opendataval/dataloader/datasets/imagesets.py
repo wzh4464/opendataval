@@ -99,9 +99,7 @@ def ResnetEmbeding(
         device = torch.device(
             "cuda"
             if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
+            else "mps" if torch.backends.mps.is_available() else "cpu"
         )
 
         # Gets the avgpool layer, the outputs of this layer are our embeddings

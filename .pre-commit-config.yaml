@@ -1,12 +1,22 @@
 repos:
 - repo: https://github.com/charliermarsh/ruff-pre-commit
   # Ruff version.
-  rev: v0.4.8
+  rev: v0.13.0
   hooks:
     - id: ruff
       args: [--fix, --exit-non-zero-on-fix]
+- repo: https://github.com/psf/black
+  rev: 25.1.0
+  hooks:
+    - id: black
+      name: black (format)
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  rev: v0.13.0
+  hooks:
+    - id: ruff
+      name: ruff (post-black)
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
     - id: check-added-large-files
       args: ['--maxkb=20000']

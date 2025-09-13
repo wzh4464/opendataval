@@ -24,7 +24,7 @@ steps_per_epoch = (train_count + batch_size - 1) // batch_size
 total_steps = total_epochs * steps_per_epoch
 
 # Divide steps across stages
-steps_per_stage = total_steps // num_stages  
+steps_per_stage = total_steps // num_stages
 time_windows = [(start_step, end_step), ...]  # CORRECT!
 ```
 
@@ -32,7 +32,7 @@ time_windows = [(start_step, end_step), ...]  # CORRECT!
 
 **Configuration**:
 - Training samples: 1000
-- Batch size: 16  
+- Batch size: 16
 - Total epochs: 10
 - Number of stages: 5
 
@@ -44,7 +44,7 @@ Steps per stage = 630 ÷ 5 = 126 steps
 
 Time Windows (Steps):
 Stage 1: [0, 125]     - 126 steps (~2.0 epochs)
-Stage 2: [126, 251]   - 126 steps (~2.0 epochs)  
+Stage 2: [126, 251]   - 126 steps (~2.0 epochs)
 Stage 3: [252, 377]   - 126 steps (~2.0 epochs)
 Stage 4: [378, 503]   - 126 steps (~2.0 epochs)
 Stage 5: [504, T]     - 126 steps (~2.0 epochs)
@@ -56,7 +56,7 @@ Stage 5: [504, T]     - 126 steps (~2.0 epochs)
 ```python
 tim_evaluator = TimInfluence(
     start_step=t1,  # Training step (not epoch)
-    end_step=t2,    # Training step (not epoch)  
+    end_step=t2,    # Training step (not epoch)
     # ... other parameters
 )
 ```
@@ -64,7 +64,7 @@ tim_evaluator = TimInfluence(
 ### 4. Updated Documentation
 
 - **README**: Clarified that time windows use steps, not epochs
-- **Code comments**: Updated to specify "steps" vs "epochs"  
+- **Code comments**: Updated to specify "steps" vs "epochs"
 - **Visualization**: Time window diagrams now show training steps
 - **Output messages**: All references updated to "steps"
 
@@ -94,7 +94,7 @@ experiment = create_multi_stage_experiment(
 
 # Expected output:
 # Steps per epoch = ceil(100/10) = 10
-# Total steps = 2 × 10 = 20 
+# Total steps = 2 × 10 = 20
 # Time windows: [0, 9], [10, T]
 ```
 
@@ -109,7 +109,7 @@ The correction ensures:
 ## Files Modified
 
 1. `multi_stage_pruning_experiment.py` - Main experiment logic
-2. `tim_influence_module.py` - Parameter documentation  
+2. `tim_influence_module.py` - Parameter documentation
 3. `multi_stage_visualization_module.py` - Time window diagrams
 4. `run_multi_stage_experiment.py` - Output display
 5. `MULTI_STAGE_README.md` - Documentation
@@ -127,7 +127,7 @@ You'll see output like:
 ```
 📊 Time window calculation:
    Training samples: 1000
-   Batch size: 16  
+   Batch size: 16
    Steps per epoch: 63
    Total epochs: 10
    Total steps: 630

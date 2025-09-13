@@ -4,23 +4,26 @@
 包含设备选择、模型工厂、数据处理等辅助功能。
 """
 
-from typing import Any, Dict, List, Optional, Union
-from pathlib import Path
 import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-import torch
 import numpy as np
-from sklearn.utils import check_random_state
+import torch
 
 from opendataval.dataloader import DataFetcher
-from opendataval.model import Model, BertClassifier, ClassifierMLP, LogisticRegression
+from opendataval.model import BertClassifier, ClassifierMLP, LogisticRegression, Model
 
 
 def select_device(preference: str = "auto") -> torch.device:
     """智能设备选择"""
     if preference == "cuda" and torch.cuda.is_available():
         return torch.device("cuda")
-    elif preference == "mps" and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    elif (
+        preference == "mps"
+        and hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    ):
         return torch.device("mps")
     elif preference == "cpu":
         return torch.device("cpu")
@@ -44,7 +47,7 @@ def set_random_seeds(seed: int):
 
 
 class ModelFactory:
-    """模型工厂类，支持创建不同类型的模型"""
+    """模型工厂类, 支持创建不同类型的模型"""
 
     @staticmethod
     def create_model(
@@ -52,7 +55,7 @@ class ModelFactory:
         input_dim: Optional[int] = None,
         output_dim: int = 2,
         pretrained_model_name: str = "distilbert-base-uncased",
-        **model_kwargs
+        **model_kwargs,
     ) -> Model:
         """创建指定类型的模型
 
@@ -80,23 +83,19 @@ class ModelFactory:
             return BertClassifier(
                 pretrained_model_name=pretrained_model_name,
                 num_classes=output_dim,
-                **model_kwargs
+                **model_kwargs,
             )
         elif model_type == "mlp":
             if input_dim is None:
                 raise ValueError("input_dim required for MLP model")
             return ClassifierMLP(
-                input_dim=input_dim,
-                num_classes=output_dim,
-                **model_kwargs
+                input_dim=input_dim, num_classes=output_dim, **model_kwargs
             )
         elif model_type == "logistic":
             if input_dim is None:
                 raise ValueError("input_dim required for Logistic model")
             return LogisticRegression(
-                input_dim=input_dim,
-                num_classes=output_dim,
-                **model_kwargs
+                input_dim=input_dim, num_classes=output_dim, **model_kwargs
             )
         else:
             raise ValueError(f"Unknown model type: {model_type}")
@@ -117,7 +116,7 @@ class DataProcessor:
         valid_count: int,
         test_count: int,
         random_state: int = 42,
-        add_noise: Optional[Dict[str, Any]] = None
+        add_noise: Optional[Dict[str, Any]] = None,
     ):
         """准备数据集
 
@@ -142,8 +141,8 @@ class DataProcessor:
     @staticmethod
     def process_text_data(x_data):
         """处理文本数据格式"""
-        if hasattr(x_data, 'dataset'):
-            # Subset对象，提取实际数据
+        if hasattr(x_data, "dataset"):
+            # Subset对象, 提取实际数据
             return [x_data.dataset[i] for i in x_data.indices]
         return x_data
 
@@ -156,7 +155,7 @@ class DataProcessor:
 
 
 class BertEmbeddingWrapper(torch.nn.Module):
-    """BERT嵌入包装器，用于LAVA等模型无关评估方法"""
+    """BERT嵌入包装器, 用于LAVA等模型无关评估方法"""
 
     def __init__(self, bert_model: BertClassifier, mode: str = "pooled"):
         super().__init__()
@@ -211,26 +210,23 @@ class ExperimentLogger:
     def log(self, message: str, level: str = "INFO"):
         """记录日志消息"""
         import datetime
+
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = {
-            "timestamp": timestamp,
-            "level": level,
-            "message": message
-        }
+        log_entry = {"timestamp": timestamp, "level": level, "message": message}
         self.logs.append(log_entry)
         print(f"[{timestamp}] {level}: {message}")
 
     def save_logs(self, filename: str = "experiment.log"):
         """保存日志到文件"""
         log_path = self.output_dir / filename
-        with open(log_path, 'w') as f:
+        with open(log_path, "w") as f:
             for log in self.logs:
                 f.write(f"[{log['timestamp']}] {log['level']}: {log['message']}\n")
 
     def save_config(self, config: Dict[str, Any], filename: str = "config.json"):
         """保存实验配置"""
         config_path = self.output_dir / filename
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=2, default=str)
 
 
@@ -239,12 +235,12 @@ def validate_csv_output(csv_path: Path, expected_epochs: List[int]) -> bool:
     import csv
 
     try:
-        with open(csv_path, 'r') as f:
+        with open(csv_path, "r") as f:
             reader = csv.reader(f)
             header = next(reader)
 
             # 检查列名格式
-            expected_headers = [f'influence_epoch_{e}' for e in expected_epochs]
+            expected_headers = [f"influence_epoch_{e}" for e in expected_epochs]
             if header != expected_headers:
                 print(f"❌ CSV头部不匹配: 期望 {expected_headers}, 实际 {header}")
                 return False
@@ -258,7 +254,9 @@ def validate_csv_output(csv_path: Path, expected_epochs: List[int]) -> bool:
             # 检查数据格式
             for i, row in enumerate(data_rows[:5]):  # 检查前5行
                 if len(row) != len(expected_epochs):
-                    print(f"❌ 第{i+1}行列数不匹配: 期望 {len(expected_epochs)}, 实际 {len(row)}")
+                    print(
+                        f"❌ 第{i+1}行列数不匹配: 期望 {len(expected_epochs)}, 实际 {len(row)}"
+                    )
                     return False
 
                 try:
@@ -283,5 +281,5 @@ def compute_statistics(data: np.ndarray) -> Dict[str, float]:
         "min": float(np.min(data)),
         "max": float(np.max(data)),
         "median": float(np.median(data)),
-        "count": int(len(data))
+        "count": len(data),
     }

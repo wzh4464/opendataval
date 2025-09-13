@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -12,11 +12,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from experiments.utils import (
+    DataProcessor,
+    ModelFactory,
+    compute_statistics,
     select_device,
     set_random_seeds,
-    ModelFactory,
-    DataProcessor,
-    compute_statistics,
 )
 
 
@@ -74,12 +74,14 @@ class TestBasic(unittest.TestCase):
         self.assertIsInstance(stats["mean"], float)
 
     def test_data_processor(self):
-        x_train, y_train, x_valid, y_valid, x_test, y_test, fetcher = DataProcessor.prepare_data(
-            dataset_name="iris",
-            train_count=50,
-            valid_count=25,
-            test_count=25,
-            random_state=42,
+        x_train, y_train, x_valid, y_valid, x_test, y_test, fetcher = (
+            DataProcessor.prepare_data(
+                dataset_name="iris",
+                train_count=50,
+                valid_count=25,
+                test_count=25,
+                random_state=42,
+            )
         )
 
         self.assertEqual(len(x_train), 50)
@@ -93,4 +95,3 @@ class TestBasic(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

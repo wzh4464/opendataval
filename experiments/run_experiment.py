@@ -3,9 +3,9 @@
 现代化累积差分数据价值评估CLI
 
 支持多种模型、数据集和评估方法的组合实验。
-使用 uv 管理依赖：uv run python -m experiments.run_experiment --help
+使用 uv 管理依赖: uv run python -m experiments.run_experiment --help
 
-特性：
+特性:
 - 配置文件支持
 - 多种模型类型 (BERT, MLP, LogisticRegression)
 - 多种数据集 (IMDB, 其他NLP/图像/表格数据)
@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import torch
 import yaml
@@ -28,10 +28,18 @@ from tqdm import tqdm
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from experiments.cumulative_differential import CumulativeDifferentialEvaluator, create_evaluator_from_config
+from experiments.cumulative_differential import (
+    CumulativeDifferentialEvaluator,
+    create_evaluator_from_config,
+)
 from experiments.utils import (
-    select_device, set_random_seeds, ModelFactory, DataProcessor,
-    BertEmbeddingWrapper, ExperimentLogger, validate_csv_output, compute_statistics
+    DataProcessor,
+    ExperimentLogger,
+    ModelFactory,
+    compute_statistics,
+    select_device,
+    set_random_seeds,
+    validate_csv_output,
 )
 
 
@@ -43,38 +51,28 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
             "train_count": 1000,
             "valid_count": 200,
             "test_count": 200,
-            "add_noise": None
+            "add_noise": None,
         },
         "model": {
             "type": "bert",
             "pretrained_model": "distilbert-base-uncased",
-            "kwargs": {}
+            "kwargs": {},
         },
-        "training": {
-            "epochs": 5,
-            "batch_size": 16,
-            "lr": 2e-5,
-            "save_every": 1
-        },
-        "evaluator": {
-            "name": "lava",
-            "kwargs": {
-                "embedding_mode": "pooled"
-            }
-        },
+        "training": {"epochs": 5, "batch_size": 16, "lr": 2e-5, "save_every": 1},
+        "evaluator": {"name": "lava", "kwargs": {"embedding_mode": "pooled"}},
         "experiment": {
             "output_dir": "./results/cumulative_differential",
             "output_prefix": "experiment",
             "device": "auto",
             "seed": 42,
             "skip_missing_checkpoints": True,
-            "verify_telescope": True
-        }
+            "verify_telescope": True,
+        },
     }
 
     if config_path and config_path.exists():
         with open(config_path) as f:
-            if config_path.suffix.lower() in ['.yaml', '.yml']:
+            if config_path.suffix.lower() in [".yaml", ".yml"]:
                 user_config = yaml.safe_load(f)
             else:  # json
                 user_config = json.load(f)
@@ -82,7 +80,11 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
         # 合并配置
         def merge_dict(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
             for key, value in update.items():
-                if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+                if (
+                    isinstance(value, dict)
+                    and key in base
+                    and isinstance(base[key], dict)
+                ):
                     base[key] = merge_dict(base[key], value)
                 else:
                     base[key] = value
@@ -94,8 +96,7 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
 
 
 def create_model_with_data_compatibility(
-    model_config: Dict[str, Any],
-    fetcher_info: Dict[str, Any]
+    model_config: Dict[str, Any], fetcher_info: Dict[str, Any]
 ) -> torch.nn.Module:
     """根据数据集信息创建兼容的模型"""
     model_type = model_config["type"]
@@ -104,15 +105,17 @@ def create_model_with_data_compatibility(
         return ModelFactory.create_model(
             model_type=model_type,
             output_dim=fetcher_info["num_classes"],
-            pretrained_model_name=model_config.get("pretrained_model", "distilbert-base-uncased"),
-            **model_config.get("kwargs", {})
+            pretrained_model_name=model_config.get(
+                "pretrained_model", "distilbert-base-uncased"
+            ),
+            **model_config.get("kwargs", {}),
         )
     else:
         return ModelFactory.create_model(
             model_type=model_type,
             input_dim=fetcher_info["input_dim"],
             output_dim=fetcher_info["num_classes"],
-            **model_config.get("kwargs", {})
+            **model_config.get("kwargs", {}),
         )
 
 
@@ -123,27 +126,29 @@ def run_experiment(config: Dict[str, Any], logger: ExperimentLogger):
     device = select_device(config["experiment"]["device"])
     set_random_seeds(config["experiment"]["seed"])
 
-    logger.log(f"🚀 开始累积差分数据价值评估实验")
+    logger.log("🚀 开始累积差分数据价值评估实验")
     logger.log(f"设备: {device}")
     logger.log(f"配置: {config}")
 
     # 1. 准备数据
     logger.log("📂 准备数据...")
     dataset_config = config["dataset"]
-    x_train, y_train, x_valid, y_valid, x_test, y_test, fetcher = DataProcessor.prepare_data(
-        dataset_name=dataset_config["name"],
-        train_count=dataset_config["train_count"],
-        valid_count=dataset_config["valid_count"],
-        test_count=dataset_config["test_count"],
-        random_state=config["experiment"]["seed"],
-        add_noise=dataset_config.get("add_noise")
+    x_train, y_train, x_valid, y_valid, x_test, y_test, fetcher = (
+        DataProcessor.prepare_data(
+            dataset_name=dataset_config["name"],
+            train_count=dataset_config["train_count"],
+            valid_count=dataset_config["valid_count"],
+            test_count=dataset_config["test_count"],
+            random_state=config["experiment"]["seed"],
+            add_noise=dataset_config.get("add_noise"),
+        )
     )
 
     # 获取数据信息
     fetcher_info = {
         "num_classes": fetcher.label_dim[0],
-        "input_dim": getattr(fetcher, 'feature_dim', [None])[0],
-        "is_text": dataset_config["name"] in ["imdb"]  # 可扩展
+        "input_dim": getattr(fetcher, "feature_dim", [None])[0],
+        "is_text": dataset_config["name"] in ["imdb"],  # 可扩展
     }
     logger.log(f"数据信息: {fetcher_info}")
 
@@ -191,6 +196,7 @@ def run_experiment(config: Dict[str, Any], logger: ExperimentLogger):
     training_config = config["training"]
 
     with tqdm(total=training_config["epochs"], desc="训练进度") as pbar:
+
         class ProgressCallback:
             def __init__(self, pbar, logger):
                 self.pbar = pbar
@@ -200,8 +206,8 @@ def run_experiment(config: Dict[str, Any], logger: ExperimentLogger):
                 self.pbar.update(1)
                 self.logger.log(f"完成 epoch {epoch + 1}")
 
-        # 注意：这里简化了进度回调，实际实现中需要修改训练函数
-        trained_model = cd_evaluator.train_with_checkpoints(
+        # 注意: 这里简化了进度回调, 实际实现中需要修改训练函数
+        cd_evaluator.train_with_checkpoints(
             model=model,
             epochs=training_config["epochs"],
             batch_size=training_config["batch_size"],
@@ -219,7 +225,7 @@ def run_experiment(config: Dict[str, Any], logger: ExperimentLogger):
     with tqdm(total=len(available_epochs), desc="计算影响力") as pbar:
         cumulative_diffs = cd_evaluator.compute_cumulative_differential(
             epochs=available_epochs,
-            skip_missing=config["experiment"]["skip_missing_checkpoints"]
+            skip_missing=config["experiment"]["skip_missing_checkpoints"],
         )
         pbar.n = len(available_epochs)
         pbar.refresh()
@@ -239,7 +245,9 @@ def run_experiment(config: Dict[str, Any], logger: ExperimentLogger):
     evaluator_name = config["evaluator"]["name"]
     seed = config["experiment"]["seed"]
 
-    output_file = output_dir / f"{output_prefix}_{dataset_name}_{evaluator_name}_seed{seed}.csv"
+    output_file = (
+        output_dir / f"{output_prefix}_{dataset_name}_{evaluator_name}_seed{seed}.csv"
+    )
 
     metadata = {
         "config": config,
@@ -261,8 +269,11 @@ def run_experiment(config: Dict[str, Any], logger: ExperimentLogger):
         stats_report[f"epoch_{epoch}"] = compute_statistics(diff_data)
 
     # 保存统计报告
-    stats_file = output_dir / f"{output_prefix}_{dataset_name}_{evaluator_name}_seed{seed}_stats.json"
-    with open(stats_file, 'w') as f:
+    stats_file = (
+        output_dir
+        / f"{output_prefix}_{dataset_name}_{evaluator_name}_seed{seed}_stats.json"
+    )
+    with open(stats_file, "w") as f:
         json.dump(stats_report, f, indent=2)
 
     logger.log(f"📊 统计报告保存至: {stats_file}")
@@ -278,23 +289,22 @@ def run_experiment(config: Dict[str, Any], logger: ExperimentLogger):
         "output_file": output_file,
         "stats_file": stats_file,
         "is_valid": is_valid_csv,
-        "telescope_valid": is_valid if config["experiment"]["verify_telescope"] else None,
-        "stats": stats_report
+        "telescope_valid": (
+            is_valid if config["experiment"]["verify_telescope"] else None
+        ),
+        "stats": stats_report,
     }
 
 
-def main():
-    """主CLI入口"""
+def _build_parser() -> argparse.ArgumentParser:
+    """构建命令行参数解析器."""
     parser = argparse.ArgumentParser(
         description="现代化累积差分数据价值评估CLI",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-
     parser.add_argument(
-        "--config", "-c", type=Path,
-        help="配置文件路径 (.json 或 .yaml)"
+        "--config", "-c", type=Path, help="配置文件路径 (.json 或 .yaml)"
     )
-
     # 基础配置覆盖
     parser.add_argument("--dataset", help="数据集名称")
     parser.add_argument("--model", help="模型类型")
@@ -303,33 +313,33 @@ def main():
     parser.add_argument("--device", help="计算设备")
     parser.add_argument("--seed", type=int, help="随机种子")
     parser.add_argument("--output-dir", type=Path, help="输出目录")
-
     # 实用选项
     parser.add_argument("--dry-run", action="store_true", help="显示配置但不运行实验")
     parser.add_argument("--list-models", action="store_true", help="列出支持的模型")
-    parser.add_argument("--list-evaluators", action="store_true", help="列出支持的评估器")
+    parser.add_argument(
+        "--list-evaluators", action="store_true", help="列出支持的评估器"
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="详细输出")
+    return parser
 
-    args = parser.parse_args()
 
-    # 列出可用选项
-    if args.list_models:
+def _handle_list_options(args: argparse.Namespace) -> bool:
+    """处理列出选项并决定是否提前退出."""
+    if getattr(args, "list_models", False):
         print("支持的模型类型:")
         for model in ModelFactory.get_supported_models():
             print(f"  - {model}")
-        return
-
-    if args.list_evaluators:
+        return True
+    if getattr(args, "list_evaluators", False):
         print("支持的评估器类型:")
-        evaluators = ["lava", "knnshapley", "influence"]
-        for evaluator in evaluators:
+        for evaluator in ["lava", "knnshapley", "influence"]:
             print(f"  - {evaluator}")
-        return
+        return True
+    return False
 
-    # 加载配置
-    config = load_config(args.config)
 
-    # 命令行参数覆盖配置文件
+def _apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> None:
+    """将命令行参数覆盖写入配置字典."""
     if args.dataset:
         config["dataset"]["name"] = args.dataset
     if args.model:
@@ -345,40 +355,63 @@ def main():
     if args.output_dir:
         config["experiment"]["output_dir"] = str(args.output_dir)
 
-    # 创建输出目录和日志
+
+def _init_logger(config: Dict[str, Any]) -> ExperimentLogger:
+    """创建输出目录并初始化实验日志器."""
     output_dir = Path(config["experiment"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
-
     logger = ExperimentLogger(output_dir)
     logger.save_config(config)
+    return logger
 
-    # 显示配置
+
+def _maybe_print_config(config: Dict[str, Any], args: argparse.Namespace) -> None:
+    """在需要时打印配置详情."""
     if args.verbose or args.dry_run:
         print("🔧 实验配置:")
         print(json.dumps(config, indent=2))
         print()
 
-    if args.dry_run:
-        print("🏃‍♂️ 模拟运行模式，实际不执行实验")
+
+def _print_final_results(results: Dict[str, Any]) -> None:
+    """打印实验最终结果摘要."""
+    print("\n" + "=" * 60)
+    print("🎊 实验完成!")
+    print(f"📄 输出文件: {results['output_file']}")
+    print(f"📊 统计报告: {results['stats_file']}")
+    print(f"✅ CSV验证: {'通过' if results['is_valid'] else '失败'}")
+    if results.get("telescope_valid") is not None:
+        print(f"🔭 望远镜求和: {'通过' if results['telescope_valid'] else '失败'}")
+    print("=" * 60)
+
+
+def main():
+    """主CLI入口."""
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    # 列出模式, 提前退出
+    if _handle_list_options(args):
         return
 
+    # 加载与覆盖配置
+    config = load_config(args.config)
+    _apply_overrides(config, args)
+
+    # 初始化日志器与输出目录
+    logger = _init_logger(config)
+
+    # 打印配置或干跑
+    _maybe_print_config(config, args)
+    if args.dry_run:
+        print("🏃‍♂️ 模拟运行模式, 实际不执行实验")
+        return
+
+    # 执行实验
     try:
-        # 运行实验
         results = run_experiment(config, logger)
-
-        # 保存日志
         logger.save_logs()
-
-        # 显示最终结果
-        print("\n" + "="*60)
-        print("🎊 实验完成!")
-        print(f"📄 输出文件: {results['output_file']}")
-        print(f"📊 统计报告: {results['stats_file']}")
-        print(f"✅ CSV验证: {'通过' if results['is_valid'] else '失败'}")
-        if results['telescope_valid'] is not None:
-            print(f"🔭 望远镜求和: {'通过' if results['telescope_valid'] else '失败'}")
-        print("="*60)
-
+        _print_final_results(results)
     except Exception as e:
         logger.log(f"❌ 实验失败: {e}", "ERROR")
         logger.save_logs()

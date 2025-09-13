@@ -9,7 +9,7 @@ The experiment divides the training process into **5 time windows based on train
 - **Stage 1**: `[0, t1]` - Early training steps
 - **Stage 2**: `[t1, t2]` - Initial convergence steps
 - **Stage 3**: `[t2, t3]` - Mid training steps
-- **Stage 4**: `[t3, t4]` - Late training steps  
+- **Stage 4**: `[t3, t4]` - Late training steps
 - **Stage 5**: `[t4, T]` - Final convergence steps
 
 **IMPORTANT**: Time windows are based on training **steps** (batch gradient updates), not epochs!
@@ -108,7 +108,7 @@ The experiment automatically divides the total training steps into equal time wi
 ```
 Stage 1: [0, 125]     - Steps 0-125   (~2.0 epochs)
 Stage 2: [126, 251]   - Steps 126-251 (~2.0 epochs)
-Stage 3: [252, 377]   - Steps 252-377 (~2.0 epochs)  
+Stage 3: [252, 377]   - Steps 252-377 (~2.0 epochs)
 Stage 4: [378, 503]   - Steps 378-503 (~2.0 epochs)
 Stage 5: [504, T]     - Steps 504-630 (~2.0 epochs)
 ```
@@ -156,7 +156,7 @@ Different time windows excel at identifying different types of problematic sampl
 # Run multiple configurations
 configs = [
     {"noise_rate": 0.2, "epochs": 10},
-    {"noise_rate": 0.3, "epochs": 15}, 
+    {"noise_rate": 0.3, "epochs": 15},
     {"noise_rate": 0.4, "epochs": 20}
 ]
 

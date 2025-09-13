@@ -2,17 +2,17 @@
 BERT情感分析实验 - 使用OpenDataVal TIM方法
 
 使用Time-varying Influence Measurement (TIM)进行BERT情感分析微调的数据价值评估实验。
-本实验设置 t1 = 0, t2 = T（完整训练过程），使用不同大小的BERT模型进行比较。
+本实验设置 t1 = 0, t2 = T (完整训练过程) , 使用不同大小的BERT模型进行比较。
 
-实验配置：
+实验配置:
 - 数据集: IMDB电影评论情感分析数据集
-- 模型: 多种BERT模型大小选项（从DistilBERT到BERT-Large）
+- 模型: 多种BERT模型大小选项 (从DistilBERT到BERT-Large)
 - 评估方法: TIM (Time-varying Influence Measurement)
 - 时间窗口: [0, T] - 完整训练过程
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -25,32 +25,32 @@ from opendataval.model import BertClassifier
 def get_bert_model_configs() -> Dict[str, Dict]:
     """获取不同大小的BERT模型配置
 
-    返回从小到大的BERT模型配置列表，包括参数规模信息。
-    注意：OpenDataVal的BertClassifier基于DistilBERT架构，只能使用DistilBERT预训练模型。
+    返回从小到大的BERT模型配置列表, 包括参数规模信息。
+    注意: OpenDataVal的BertClassifier基于DistilBERT架构, 只能使用DistilBERT预训练模型。
 
     Returns:
-        Dict[str, Dict]: 模型配置字典，键为模型名称，值为配置参数
+        Dict[str, Dict]: 模型配置字典, 键为模型名称, 值为配置参数
     """
     return {
         # DistilBERT模型 (OpenDataVal支持)
         "distilbert-base-uncased": {
             "pretrained_model_name": "distilbert-base-uncased",
             "parameters": "66M",
-            "description": "DistilBERT-Base (66M参数) - BERT的轻量级版本，速度快",
+            "description": "DistilBERT-Base (66M参数) - BERT的轻量级版本, 速度快",
         },
         "distilbert-base-cased": {
-            "pretrained_model_name": "distilbert-base-cased", 
+            "pretrained_model_name": "distilbert-base-cased",
             "parameters": "66M",
             "description": "DistilBERT-Base-Cased (66M参数) - 区分大小写版本",
         },
         # 多语言DistilBERT
         "distilbert-base-multilingual-cased": {
             "pretrained_model_name": "distilbert-base-multilingual-cased",
-            "parameters": "134M", 
+            "parameters": "134M",
             "description": "DistilBERT多语言 (134M参数) - 支持多种语言",
         },
-        # 注意：标准BERT模型与DistilBERT架构不兼容，已移除
-        # 如需使用更大模型，需要修改BertClassifier类的实现
+        # 注意: 标准BERT模型与DistilBERT架构不兼容, 已移除
+        # 如需使用更大模型, 需要修改BertClassifier类的实现
     }
 
 
@@ -72,7 +72,7 @@ class BertTimExperiment:
         Parameters:
         -----------
         dataset_name : str
-            数据集名称，默认"imdb"用于情感分析
+            数据集名称, 默认"imdb"用于情感分析
         train_count : int
             训练样本数量
         valid_count : int
@@ -108,7 +108,7 @@ class BertTimExperiment:
             f"📊 数据规模: 训练={self.train_count}, 验证={self.valid_count}, 测试={self.test_count}"
         )
 
-        # 使用DataFetcher.setup加载IMDB数据集，并指定数据分割
+        # 使用DataFetcher.setup加载IMDB数据集, 并指定数据分割
         fetcher = DataFetcher.setup(
             dataset_name=self.dataset_name,
             train_count=self.train_count,
@@ -117,27 +117,27 @@ class BertTimExperiment:
             random_state=self.random_state,
         )
 
-        # 获取原始文本数据（不使用embedding）
+        # 获取原始文本数据 (不使用embedding)
         x_train, y_train, x_valid, y_valid, x_test, y_test = fetcher.datapoints
-        
+
         # 转换数据类型以确保兼容性
-        if hasattr(x_train, 'dataset'):
-            # 如果是Subset对象，提取实际数据
+        if hasattr(x_train, "dataset"):
+            # 如果是Subset对象, 提取实际数据
             x_train_data = [x_train.dataset[i] for i in x_train.indices]
-            x_valid_data = [x_valid.dataset[i] for i in x_valid.indices] 
+            x_valid_data = [x_valid.dataset[i] for i in x_valid.indices]
             x_test_data = [x_test.dataset[i] for i in x_test.indices]
         else:
             x_train_data, x_valid_data, x_test_data = x_train, x_valid, x_test
-            
-        # 确保标签是torch tensor格式，并转换one-hot为索引
+
+        # 确保标签是torch tensor格式, 并转换one-hot为索引
         if not isinstance(y_train, torch.Tensor):
             y_train = torch.tensor(y_train, dtype=torch.long)
         if not isinstance(y_valid, torch.Tensor):
             y_valid = torch.tensor(y_valid, dtype=torch.long)
         if not isinstance(y_test, torch.Tensor):
             y_test = torch.tensor(y_test, dtype=torch.long)
-            
-        # 如果是one-hot编码，转换为索引格式
+
+        # 如果是one-hot编码, 转换为索引格式
         if len(y_train.shape) > 1 and y_train.shape[1] > 1:
             y_train = torch.argmax(y_train, dim=1)
             print(f"   转换one-hot标签为索引: {y_train[:5]}")
@@ -151,7 +151,7 @@ class BertTimExperiment:
         print(f"   验证集样本数: {len(x_valid_data)}")
         print(f"   测试集样本数: {len(x_test_data)}")
         print(f"   类别数: {len(np.unique(y_train))}")
-        
+
         # 返回处理后的数据
         return x_train_data, y_train, x_valid_data, y_valid, x_test_data, y_test
 
@@ -166,7 +166,7 @@ class BertTimExperiment:
             num_train_layers=2,  # 微调最后2层
         )
 
-        # 智能设备选择，优先GPU
+        # 智能设备选择, 优先GPU
         if torch.cuda.is_available():
             device = torch.device("cuda")
             print("🚀 使用CUDA GPU加速")
@@ -175,11 +175,12 @@ class BertTimExperiment:
             print("🍎 使用Apple Silicon MPS加速")
             # MPS优化设置
             import os
-            os.environ['PYTORCH_MPS_HIGH_WATERMARK_RATIO'] = '0.0'
+
+            os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
         else:
             device = torch.device("cpu")
             print("💻 使用CPU (未检测到GPU)")
-            
+
         model = model.to(device)
 
         print(f"🤖 创建模型: {model_config['description']}")
@@ -188,7 +189,11 @@ class BertTimExperiment:
         return model
 
     def setup_tim_evaluator(
-        self, t1: int = 0, t2: int = None, num_epochs: int = 5, batch_size: int = 16
+        self,
+        t1: int = 0,
+        t2: Optional[int] = None,
+        num_epochs: int = 5,
+        batch_size: int = 16,
     ) -> TimInfluence:
         """
         设置TIM评估器
@@ -196,9 +201,9 @@ class BertTimExperiment:
         Parameters:
         -----------
         t1 : int
-            时间窗口开始步骤，默认0（从开始）
+            时间窗口开始步骤, 默认0 (从开始)
         t2 : int
-            时间窗口结束步骤，None表示到结束（T）
+            时间窗口结束步骤, None表示到结束 (T)
         num_epochs : int
             训练轮数
         batch_size : int
@@ -222,9 +227,16 @@ class BertTimExperiment:
         return tim_evaluator
 
     def run_single_experiment(
-        self, model_name: str, model_config: Dict, data: Tuple, tim_config: Dict = None
+        self,
+        model_name: str,
+        model_config: Dict,
+        data: Tuple,
+        tim_config: Optional[Dict] = None,
     ) -> Dict:
-        """运行单个BERT+TIM实验"""
+        """运行单个BERT+TIM实验.
+
+        注释说明: 将复杂流程拆分为若干私有步骤, 降低圈复杂度.
+        """
         x_train, y_train, x_valid, y_valid, x_test, y_test = data
 
         print("\n" + "=" * 60)
@@ -232,14 +244,8 @@ class BertTimExperiment:
         print(f"📝 {model_config['description']}")
         print("=" * 60)
 
-        # 默认TIM配置
-        if tim_config is None:
-            tim_config = {
-                "t1": 0,
-                "t2": None,  # 到结束
-                "num_epochs": 3,
-                "batch_size": 8,  # BERT需要较小的batch size
-            }
+        # 默认TIM配置. 若未提供则补齐默认值.
+        tim_config = self._ensure_default_tim_config(tim_config)
 
         try:
             # 1. 创建模型
@@ -248,113 +254,31 @@ class BertTimExperiment:
             # 2. 设置TIM评估器
             tim_evaluator = self.setup_tim_evaluator(**tim_config)
 
-            # 3. 输入数据到TIM - 需要转换为tensor格式
-            # TIM内部需要tensor数据，但我们有文本数据，需要先tokenize
-            print("   🔄 对文本数据进行tokenization...")
-            
-            # 使用模型的tokenizer处理文本数据
-            train_dataset = model.tokenize(x_train)
-            valid_dataset = model.tokenize(x_valid)
-            
-            # 获取tokenized的tensor数据
-            train_input_ids = train_dataset.tensors[0]
-            train_attention_mask = train_dataset.tensors[1]  
-            valid_input_ids = valid_dataset.tensors[0]
-            valid_attention_mask = valid_dataset.tensors[1]
-            
-            # 确保数据在正确的设备上
-            device = model.bert.device
-            train_input_ids = train_input_ids.to(device)
-            train_attention_mask = train_attention_mask.to(device)
-            valid_input_ids = valid_input_ids.to(device)
-            valid_attention_mask = valid_attention_mask.to(device)
-            y_train = y_train.to(device)
-            y_valid = y_valid.to(device)
-            
-            # 为TIM创建简化的tensor输入（转换为float以支持梯度计算）
+            # 3. 文本tokenize并移动到设备, 然后注入TIM输入
+            (
+                train_input_ids,
+                train_attention_mask,
+                valid_input_ids,
+                valid_attention_mask,
+                y_train,
+                y_valid,
+                device,
+            ) = self._tokenize_move_and_prepare_inputs(
+                model, x_train, x_valid, y_train, y_valid
+            )
             tim_evaluator.input_data(
                 x_train=train_input_ids.float(),
                 y_train=y_train,
                 x_valid=valid_input_ids.float(),
-                y_valid=y_valid
+                y_valid=y_valid,
             )
 
-            # 4. 创建TIM兼容的BERT包装器
-            class BertTimWrapper(torch.nn.Module):
-                """包装BERT模型以兼容TIM的tensor输入格式"""
-                def __init__(self, bert_model, attention_mask):
-                    super().__init__()
-                    self.bert_model = bert_model
-                    self.attention_mask = attention_mask.detach()  # 避免梯度问题
-                    
-                def forward(self, input_ids):
-                    # TIM传递的是float tensor，我们需要转换为token IDs
-                    batch_size = input_ids.shape[0]
-                    device = input_ids.device
-                    
-                    # 使用对应的attention mask片段  
-                    mask = self.attention_mask[:batch_size].to(device)
-                    
-                    # 将float tensor转为long token IDs
-                    input_ids_long = input_ids.long()
-                    
-                    # 调用BERT并获取logits（不要softmax）
-                    outputs = self.bert_model(input_ids_long, attention_mask=mask)
-                    
-                    # 移除最后的Softmax层，直接返回logits以便梯度传播
-                    # BERT classifier的最后一层是softmax，我们需要raw logits
-                    if hasattr(self.bert_model, 'classifier'):
-                        # 获取分类器之前的hidden states
-                        hidden_states = self.bert_model.bert(input_ids_long, attention_mask=mask)[0]
-                        pooled_output = hidden_states[:, 0]  # [CLS] token
-                        
-                        # 只通过linear层，不要softmax
-                        pre_linear = self.bert_model.classifier.pre_linear(pooled_output)
-                        activated = self.bert_model.classifier.acti(pre_linear)
-                        dropped = self.bert_model.classifier.dropout(activated)
-                        logits = self.bert_model.classifier.linear(dropped)
-                        
-                        return logits  # 返回raw logits而不是softmax输出
-                    else:
-                        return outputs
-                    
-                def predict(self, input_ids):
-                    """TIM调用的预测接口"""
-                    with torch.enable_grad():
-                        return self.forward(input_ids)
-                    
-                def parameters(self):
-                    return self.bert_model.parameters()
-                    
-                def named_parameters(self):
-                    return self.bert_model.named_parameters()
-                    
-                def zero_grad(self):
-                    return self.bert_model.zero_grad()
-                    
-                def train(self):
-                    self.bert_model.train()
-                    return self
-                    
-                def eval(self):
-                    self.bert_model.eval() 
-                    return self
-            
-            # 创建包装器
-            bert_wrapper = BertTimWrapper(model, train_attention_mask)
+            # 4. 构造兼容TIM的BERT包装器
+            bert_wrapper = self._build_bert_tim_wrapper(model, train_attention_mask)
             tim_evaluator.pred_model = bert_wrapper
 
-            # 5. 训练并记录状态
-            print("\n🚀 开始TIM训练...")
-            tim_evaluator.train_data_values(
-                epochs=tim_config["num_epochs"],
-                batch_size=tim_config["batch_size"],
-                lr=2e-5,  # BERT推荐学习率
-            )
-
-            # 6. 计算影响力数据值
-            print("\n📊 计算数据影响力...")
-            data_values = tim_evaluator.evaluate_data_values()
+            # 5. 训练与评估
+            data_values = self._train_and_eval_tim(tim_evaluator, tim_config)
 
             # 7. 分析结果
             results = self.analyze_results(
@@ -371,6 +295,117 @@ class BertTimExperiment:
             print(f"❌ 实验失败: {model_name}")
             print(f"   错误: {e!s}")
             return {"model_name": model_name, "status": "failed", "error": str(e)}
+
+    # ==== 私有辅助方法, 用于拆分复杂流程 ====
+
+    def _ensure_default_tim_config(self, tim_config: Optional[Dict]) -> Dict:
+        """确保TIM配置存在并带有默认值."""
+        if tim_config is None:
+            return {"t1": 0, "t2": None, "num_epochs": 3, "batch_size": 8}
+        return tim_config
+
+    def _tokenize_move_and_prepare_inputs(
+        self,
+        model: BertClassifier,
+        x_train,
+        x_valid,
+        y_train: torch.Tensor,
+        y_valid: torch.Tensor,
+    ):
+        """Tokenize文本并移动到设备, 返回供TIM使用的tensor.
+
+        说明: TIM需要tensor输入, BERT tokenizer负责将文本转为token IDs.
+        """
+        print("   🔄 对文本数据进行tokenization...")
+        train_dataset = model.tokenize(x_train)
+        valid_dataset = model.tokenize(x_valid)
+
+        train_input_ids = train_dataset.tensors[0]
+        train_attention_mask = train_dataset.tensors[1]
+        valid_input_ids = valid_dataset.tensors[0]
+        valid_attention_mask = valid_dataset.tensors[1]
+
+        device = model.bert.device
+        train_input_ids = train_input_ids.to(device)
+        train_attention_mask = train_attention_mask.to(device)
+        valid_input_ids = valid_input_ids.to(device)
+        valid_attention_mask = valid_attention_mask.to(device)
+        y_train = y_train.to(device)
+        y_valid = y_valid.to(device)
+
+        return (
+            train_input_ids,
+            train_attention_mask,
+            valid_input_ids,
+            valid_attention_mask,
+            y_train,
+            y_valid,
+            device,
+        )
+
+    def _build_bert_tim_wrapper(self, model, attention_mask):
+        """构建BERT包装器以兼容TIM的调用约定."""
+
+        class BertTimWrapper(torch.nn.Module):
+            """包装BERT模型以兼容TIM的tensor输入格式."""
+
+            def __init__(self, bert_model, attention_mask):
+                super().__init__()
+                self.bert_model = bert_model
+                self.attention_mask = attention_mask.detach()  # 避免梯度泄漏
+
+            def forward(self, input_ids):
+                # TIM传递float tensor, 需转为token IDs
+                batch_size = input_ids.shape[0]
+                device = input_ids.device
+                mask = self.attention_mask[:batch_size].to(device)
+                input_ids_long = input_ids.long()
+                outputs = self.bert_model(input_ids_long, attention_mask=mask)
+                if hasattr(self.bert_model, "classifier"):
+                    hidden_states = self.bert_model.bert(
+                        input_ids_long, attention_mask=mask
+                    )[0]
+                    pooled_output = hidden_states[:, 0]
+                    pre_linear = self.bert_model.classifier.pre_linear(pooled_output)
+                    activated = self.bert_model.classifier.acti(pre_linear)
+                    dropped = self.bert_model.classifier.dropout(activated)
+                    logits = self.bert_model.classifier.linear(dropped)
+                    return logits
+                return outputs
+
+            def predict(self, input_ids):
+                with torch.enable_grad():
+                    return self.forward(input_ids)
+
+            def parameters(self):
+                return self.bert_model.parameters()
+
+            def named_parameters(self):
+                return self.bert_model.named_parameters()
+
+            def zero_grad(self):
+                return self.bert_model.zero_grad()
+
+            def train(self):
+                self.bert_model.train()
+                return self
+
+            def eval(self):
+                self.bert_model.eval()
+                return self
+
+        return BertTimWrapper(model, attention_mask)
+
+    def _train_and_eval_tim(self, tim_evaluator: TimInfluence, tim_config: Dict):
+        """训练TIM并计算影响力结果."""
+        print("\n🚀 开始TIM训练...")
+        tim_evaluator.train_data_values(
+            epochs=tim_config["num_epochs"],
+            batch_size=tim_config["batch_size"],
+            lr=2e-5,
+        )
+        print("\n📊 计算数据影响力...")
+        return tim_evaluator.evaluate_data_values()
 
     def analyze_results(
         self,
@@ -457,7 +492,7 @@ class BertTimExperiment:
 
         return results
 
-    def save_results(self, filename: str = None):
+    def save_results(self, filename: Optional[str] = None):
         """保存实验结果到JSON文件"""
         import json
 
@@ -471,7 +506,7 @@ class BertTimExperiment:
 
         print(f"💾 结果已保存到: {filepath}")
 
-    def run_full_experiment_suite(self, selected_models: List[str] = None):
+    def run_full_experiment_suite(self, selected_models: Optional[List[str]] = None):
         """运行完整的BERT模型对比实验"""
 
         print("🔬 BERT + TIM 情感分析实验套件")
@@ -484,19 +519,19 @@ class BertTimExperiment:
             # 默认选择支持的DistilBERT模型
             selected_models = [
                 "distilbert-base-uncased",  # 基础: 66M参数
-                "distilbert-base-cased",    # 区分大小写: 66M参数  
+                "distilbert-base-cased",  # 区分大小写: 66M参数
                 "distilbert-base-multilingual-cased",  # 多语言: 134M参数 (最大)
             ]
 
         print(f"📋 选择的模型: {selected_models}")
 
-        # 准备数据（所有实验使用相同数据）
+        # 准备数据 (所有实验使用相同数据)
         data = self.prepare_data()
 
-        # TIM配置 - 设置 t1=0, t2=T（完整训练过程）
+        # TIM配置 - 设置 t1=0, t2=T (完整训练过程)
         tim_config = {
             "t1": 0,  # 从训练开始
-            "t2": None,  # 到训练结束（T）
+            "t2": None,  # 到训练结束 (T)
             "num_epochs": 2,  # 减少epoch数以适应实验
             "batch_size": 8,  # 较小的batch size适合BERT
         }
@@ -580,34 +615,34 @@ def main():
     # 创建实验实例
     experiment = BertTimExperiment(
         dataset_name="imdb",  # IMDB情感分析数据集
-        train_count=500,  # 训练样本数（实验用较小数据集）
+        train_count=500,  # 训练样本数 (实验用较小数据集)
         valid_count=100,  # 验证样本数
         test_count=100,  # 测试样本数
         random_state=42,
         output_dir="./bert_tim_results",
     )
 
-    # 选择要测试的模型（按推荐顺序，仅支持DistilBERT）
+    # 选择要测试的模型 (按推荐顺序, 仅支持DistilBERT)
     selected_models = [
         "distilbert-base-uncased",  # 基础模型
-        "distilbert-base-cased",    # 区分大小写
+        "distilbert-base-cased",  # 区分大小写
         "distilbert-base-multilingual-cased",  # 最大的多语言模型
     ]
 
-    print("🎯 选择测试的模型（DistilBERT系列，按参数规模）:")
+    print("🎯 选择测试的模型 (DistilBERT系列, 按参数规模) :")
     for model in selected_models:
         print(f"  • {model}: {model_configs[model]['parameters']} 参数")
     print()
-    
-    print("ℹ️  说明: OpenDataVal的BertClassifier基于DistilBERT架构")
-    print("   只支持DistilBERT系列预训练模型，不支持标准BERT/RoBERTa")
+
+    print(" 说明: OpenDataVal的BertClassifier基于DistilBERT架构")
+    print("   只支持DistilBERT系列预训练模型, 不支持标准BERT/RoBERTa")
     print("   实验在GPU服务器上运行")
     print()
 
     # 运行实验套件
     experiment.run_full_experiment_suite(selected_models)
 
-    print("🎉 DistilBERT + TIM 实验配置完成！")
+    print("🎉 DistilBERT + TIM 实验配置完成! ")
     print("   已修复模型兼容性和数据处理问题")
 
 

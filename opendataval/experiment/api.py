@@ -17,8 +17,8 @@ from opendataval.dataloader import DataFetcher, mix_labels
 from opendataval.dataval import DataEvaluator
 from opendataval.experiment.util import filter_kwargs
 from opendataval.metrics import Metrics
-from opendataval.util import get_torch_device
 from opendataval.model import Model, ModelFactory
+from opendataval.util import get_torch_device
 
 
 class ExperimentMediator:

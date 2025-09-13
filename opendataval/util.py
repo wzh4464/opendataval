@@ -1,10 +1,11 @@
 import itertools
+import random
 import time
 from datetime import timedelta
 from enum import Enum
 from functools import update_wrapper
 from itertools import islice
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Callable, Generic, Optional, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -12,8 +13,6 @@ import torch
 import tqdm
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
-from typing import Union
-import random
 
 
 def load_mediator_output(filepath: str):

@@ -2,17 +2,17 @@
 """
 Multi-Stage TIM Influence Data Pruning Experiment
 
-This experiment divides the training process into 5 time windows and performs 
+This experiment divides the training process into 5 time windows and performs
 TIM influence computation and data cleaning for each stage:
-- Stage 1: [0, t1] 
+- Stage 1: [0, t1]
 - Stage 2: [t1, t2]
-- Stage 3: [t2, t3] 
+- Stage 3: [t2, t3]
 - Stage 4: [t3, t4]
 - Stage 5: [t4, T]
 
 For each stage, we:
 1. Compute TIM influence scores for that time window
-2. Identify and prune low-influence samples  
+2. Identify and prune low-influence samples
 3. Retrain on cleaned data
 4. Compare performance across all stages
 """
@@ -28,9 +28,11 @@ import numpy as np
 import torch
 
 from my_experiments.bert_training_module import create_bert_trainer
+from my_experiments.multi_stage_visualization_module import (
+    create_multi_stage_visualizer,
+)
 from my_experiments.noise_data_module import create_noise_processor
 from my_experiments.tim_influence_module import create_tim_calculator
-from my_experiments.multi_stage_visualization_module import create_multi_stage_visualizer
 
 
 class MultiStagePruningExperiment:
@@ -145,12 +147,12 @@ class MultiStagePruningExperiment:
 
         # Calculate time windows for stages (based on steps, not epochs)
         self.time_windows = self._calculate_time_windows(
-            total_epochs=epochs, 
+            total_epochs=epochs,
             num_stages=num_stages,
             batch_size=batch_size,
-            train_count=train_count
+            train_count=train_count,
         )
-        
+
         # Initialize components
         self.data_processor = None
         self.bert_trainer = None
@@ -170,10 +172,16 @@ class MultiStagePruningExperiment:
             "error_log": [],
         }
 
-    def _calculate_time_windows(self, total_epochs: int, num_stages: int, batch_size: int = 16, train_count: int = 1000) -> List[Tuple[int, Optional[int]]]:
+    def _calculate_time_windows(
+        self,
+        total_epochs: int,
+        num_stages: int,
+        batch_size: int = 16,
+        train_count: int = 1000,
+    ) -> List[Tuple[int, Optional[int]]]:
         """
         Calculate time windows for each stage based on training STEPS (not epochs)
-        
+
         Parameters:
         -----------
         total_epochs : int
@@ -184,53 +192,59 @@ class MultiStagePruningExperiment:
             Batch size for calculating steps per epoch
         train_count : int
             Number of training samples
-            
+
         Returns:
         --------
         List[Tuple[int, Optional[int]]]
             List of (start_step, end_step) tuples for each stage
         """
         # Calculate total training steps
-        steps_per_epoch = (train_count + batch_size - 1) // batch_size  # Ceiling division
+        steps_per_epoch = (
+            train_count + batch_size - 1
+        ) // batch_size  # Ceiling division
         total_steps = total_epochs * steps_per_epoch
-        
-        print(f"📊 Time window calculation:")
+
+        print("📊 Time window calculation:")
         print(f"   Training samples: {train_count}")
         print(f"   Batch size: {batch_size}")
         print(f"   Steps per epoch: {steps_per_epoch}")
         print(f"   Total epochs: {total_epochs}")
         print(f"   Total steps: {total_steps}")
-        
+
         # Divide steps evenly across stages
         steps_per_stage = total_steps // num_stages
         remainder_steps = total_steps % num_stages
-        
+
         time_windows = []
         current_step = 0
-        
+
         for stage in range(num_stages):
             start_step = current_step
-            
+
             # Add remainder steps to early stages
             stage_steps = steps_per_stage + (1 if stage < remainder_steps else 0)
             end_step = current_step + stage_steps - 1  # End step is inclusive
-            
+
             # For the last stage, end at T (None)
             if stage == num_stages - 1:
                 time_windows.append((start_step, None))  # [t4, T]
             else:
                 time_windows.append((start_step, end_step))
-                
+
             current_step = end_step + 1  # Next stage starts after current end
-            
+
         # Print time windows for verification
-        print(f"   Time windows (steps):")
+        print("   Time windows (steps):")
         for i, (start, end) in enumerate(time_windows, 1):
             end_desc = "T" if end is None else str(end)
-            steps_in_window = (total_steps - start) if end is None else (end - start + 1)
+            steps_in_window = (
+                (total_steps - start) if end is None else (end - start + 1)
+            )
             epochs_equiv = steps_in_window / steps_per_epoch
-            print(f"     Stage {i}: [{start}, {end_desc}] - {steps_in_window} steps (~{epochs_equiv:.1f} epochs)")
-            
+            print(
+                f"     Stage {i}: [{start}, {end_desc}] - {steps_in_window} steps (~{epochs_equiv:.1f} epochs)"
+            )
+
         return time_windows
 
     def setup_components(self):
@@ -298,7 +312,9 @@ class MultiStagePruningExperiment:
 
             print("✅ Data preparation complete")
             print(f"   Total training samples: {len(noisy_data['y_train'])}")
-            print(f"   Noise samples: {len(noise_indices)} ({len(noise_indices) / len(noisy_data['y_train']) * 100:.1f}%)")
+            print(
+                f"   Noise samples: {len(noise_indices)} ({len(noise_indices) / len(noisy_data['y_train']) * 100:.1f}%)"
+            )
 
             return noisy_data, noise_indices
 
@@ -341,7 +357,9 @@ class MultiStagePruningExperiment:
             }
 
             # Save model and initial state
-            torch.save(original_model.state_dict(), self.output_dir / "original_model.pt")
+            torch.save(
+                original_model.state_dict(), self.output_dir / "original_model.pt"
+            )
             torch.save(initial_state, self.output_dir / "initial_state.pt")
 
             print("✅ Original model training complete")
@@ -355,16 +373,16 @@ class MultiStagePruningExperiment:
             raise
 
     def run_stage_experiment(
-        self, 
-        stage_num: int, 
-        time_window: Tuple[int, Optional[int]], 
-        original_model, 
+        self,
+        stage_num: int,
+        time_window: Tuple[int, Optional[int]],
+        original_model,
         original_data: Dict,
-        initial_state: Dict
+        initial_state: Dict,
     ) -> Dict:
         """
         Run experiment for a specific stage
-        
+
         Parameters:
         -----------
         stage_num : int
@@ -377,7 +395,7 @@ class MultiStagePruningExperiment:
             Original noisy data
         initial_state : Dict
             Initial model state for consistent initialization
-            
+
         Returns:
         --------
         Dict
@@ -386,7 +404,7 @@ class MultiStagePruningExperiment:
         start_epoch, end_epoch = time_window
         stage_name = f"Stage_{stage_num}"
         end_desc = "T" if end_epoch is None else str(end_epoch)
-        
+
         print(f"\n🔬 Running {stage_name}: Time window [{start_epoch}, {end_desc}]")
         print("=" * 60)
 
@@ -394,7 +412,7 @@ class MultiStagePruningExperiment:
             # 1. Create TIM calculator for this stage
             tim_calculator = create_tim_calculator(
                 t1=start_epoch,  # start_step
-                t2=end_epoch,    # end_step  
+                t2=end_epoch,  # end_step
                 num_epochs=self.config["epochs"],
                 batch_size=self.config["tim_batch_size"],
                 regularization=self.config["regularization"],
@@ -404,7 +422,9 @@ class MultiStagePruningExperiment:
 
             # 2. Compute influence scores for this time window
             print(f"📊 Computing TIM influence for [{start_epoch}, {end_desc}]...")
-            influence_scores = tim_calculator.compute_influence(original_model, original_data)
+            influence_scores = tim_calculator.compute_influence(
+                original_model, original_data
+            )
 
             # 3. Analyze influence scores
             noise_indices = self.data_processor.noise_indices
@@ -425,7 +445,9 @@ class MultiStagePruningExperiment:
             # 6. Train model on pruned data
             print(f"🚀 Training {stage_name} model on pruned data...")
             pruned_model = self.bert_trainer.create_model()
-            pruned_model = self.bert_trainer.load_model_state(pruned_model, initial_state)
+            pruned_model = self.bert_trainer.load_model_state(
+                pruned_model, initial_state
+            )
 
             pruned_history = self.bert_trainer.train_model(
                 model=pruned_model,
@@ -451,7 +473,7 @@ class MultiStagePruningExperiment:
                 "time_window": {
                     "start_epoch": start_epoch,
                     "end_epoch": end_epoch,
-                    "description": f"[{start_epoch}, {end_desc}]"
+                    "description": f"[{start_epoch}, {end_desc}]",
                 },
                 "influence_analysis": {
                     "scores": influence_scores.tolist(),
@@ -478,30 +500,43 @@ class MultiStagePruningExperiment:
                 },
                 "training_results": {
                     "pruned_history": pruned_history,
-                    "model_path": str(self.output_dir / f"{stage_name.lower()}_model.pt"),
+                    "model_path": str(
+                        self.output_dir / f"{stage_name.lower()}_model.pt"
+                    ),
                 },
-                "status": "success"
+                "status": "success",
             }
 
             # Save stage model
-            torch.save(pruned_model.state_dict(), self.output_dir / f"{stage_name.lower()}_model.pt")
+            torch.save(
+                pruned_model.state_dict(),
+                self.output_dir / f"{stage_name.lower()}_model.pt",
+            )
 
             # Save stage results
             stage_dir = self.output_dir / stage_name.lower()
             stage_dir.mkdir(exist_ok=True)
-            
+
             tim_calculator.save_influence_results(
-                influence_scores, influence_analysis, str(stage_dir / "influence_analysis")
+                influence_scores,
+                influence_analysis,
+                str(stage_dir / "influence_analysis"),
             )
-            
+
             self.bert_trainer.save_training_history(
                 pruned_history, str(stage_dir / "training_history")
             )
 
             print(f"✅ {stage_name} experiment complete")
-            print(f"   Influence range: [{np.min(influence_scores):.6f}, {np.max(influence_scores):.6f}]")
-            print(f"   Pruned samples: {len(prune_indices)} ({len(prune_indices) / len(original_data['y_train']) * 100:.1f}%)")
-            print(f"   Noise recall: {noise_recall:.2%}, Precision: {noise_precision:.2%}")
+            print(
+                f"   Influence range: [{np.min(influence_scores):.6f}, {np.max(influence_scores):.6f}]"
+            )
+            print(
+                f"   Pruned samples: {len(prune_indices)} ({len(prune_indices) / len(original_data['y_train']) * 100:.1f}%)"
+            )
+            print(
+                f"   Noise recall: {noise_recall:.2%}, Precision: {noise_precision:.2%}"
+            )
 
             return stage_results
 
@@ -509,17 +544,17 @@ class MultiStagePruningExperiment:
             error_msg = f"{stage_name} experiment failed: {e}"
             print(f"❌ {error_msg}")
             self.results["error_log"].append(error_msg)
-            
+
             return {
                 "stage_num": stage_num,
                 "stage_name": stage_name,
                 "time_window": {
                     "start_epoch": start_epoch,
                     "end_epoch": end_epoch,
-                    "description": f"[{start_epoch}, {end_desc}]"
+                    "description": f"[{start_epoch}, {end_desc}]",
                 },
                 "status": "failed",
-                "error": str(e)
+                "error": str(e),
             }
 
     def create_multi_stage_visualizations(self):
@@ -531,9 +566,15 @@ class MultiStagePruningExperiment:
         print("🎨 Creating multi-stage visualizations...")
 
         try:
-            successful_stages = [s for s in self.results["stage_results"].values() if s["status"] == "success"]
-            original_history = self.results.get("original_training", {}).get("history", {})
-            
+            successful_stages = [
+                s
+                for s in self.results["stage_results"].values()
+                if s["status"] == "success"
+            ]
+            original_history = self.results.get("original_training", {}).get(
+                "history", {}
+            )
+
             if not successful_stages:
                 print("⚠️  No successful stages to visualize")
                 return
@@ -542,44 +583,46 @@ class MultiStagePruningExperiment:
             self.visualizer.plot_multi_stage_influence_comparison(
                 successful_stages,
                 title="TIM Influence Scores Across Time Windows",
-                save_name="multi_stage_influence_comparison.png"
+                save_name="multi_stage_influence_comparison.png",
             )
-            
+
             # 2. Stage performance comparison
             self.visualizer.plot_stage_performance_comparison(
                 successful_stages,
                 original_history=original_history,
-                title="Performance Comparison Across Time Windows", 
-                save_name="stage_performance_comparison.png"
+                title="Performance Comparison Across Time Windows",
+                save_name="stage_performance_comparison.png",
             )
-            
+
             # 3. Training curves comparison
             self.visualizer.plot_training_curves_comparison(
                 original_history,
                 successful_stages,
                 title="Training Loss Curves: Original vs Multi-Stage Pruned Models",
-                save_name="training_curves_comparison.png"
+                save_name="training_curves_comparison.png",
             )
-            
+
             # 4. Influence heatmap
             self.visualizer.plot_influence_heatmap(
                 successful_stages,
                 title="Influence Score Distribution Heatmap Across Time Windows",
-                save_name="influence_heatmap.png"
+                save_name="influence_heatmap.png",
             )
-            
+
             # 5. Time window diagram
             # Calculate total steps for diagram
-            steps_per_epoch = (self.config["train_count"] + self.config["batch_size"] - 1) // self.config["batch_size"]
+            steps_per_epoch = (
+                self.config["train_count"] + self.config["batch_size"] - 1
+            ) // self.config["batch_size"]
             total_steps = self.config["epochs"] * steps_per_epoch
-            
+
             self.visualizer.plot_time_window_diagram(
                 self.time_windows,
                 total_steps,
                 title="Training Time Windows Division (Steps)",
-                save_name="time_window_diagram.png"
+                save_name="time_window_diagram.png",
             )
-            
+
             # 6. Comprehensive dashboard
             self.visualizer.plot_comprehensive_dashboard(
                 original_history,
@@ -587,7 +630,7 @@ class MultiStagePruningExperiment:
                 self.config,
                 self.results.get("data_stats", {}),
                 title="Multi-Stage TIM Influence Data Pruning Experiment Dashboard",
-                save_name="comprehensive_dashboard.png"
+                save_name="comprehensive_dashboard.png",
             )
 
             print("✅ Multi-stage visualizations complete")
@@ -596,7 +639,6 @@ class MultiStagePruningExperiment:
             error_msg = f"Visualization creation failed: {e}"
             print(f"⚠️  {error_msg}")
             self.results["error_log"].append(error_msg)
-
 
     def run_complete_experiment(self) -> Dict:
         """Run complete multi-stage pruning experiment"""
@@ -616,20 +658,22 @@ class MultiStagePruningExperiment:
             noisy_data, noise_indices = self.prepare_data()
 
             # 3. Train original model
-            original_model, initial_state, original_history = self.train_original_model(noisy_data)
+            original_model, initial_state, original_history = self.train_original_model(
+                noisy_data
+            )
 
             # 4. Run experiments for each stage
             self.results["stage_results"] = {}
-            
+
             for stage_num, time_window in enumerate(self.time_windows, 1):
                 stage_results = self.run_stage_experiment(
                     stage_num=stage_num,
                     time_window=time_window,
                     original_model=original_model,
                     original_data=noisy_data,
-                    initial_state=initial_state
+                    initial_state=initial_state,
                 )
-                
+
                 self.results["stage_results"][f"stage_{stage_num}"] = stage_results
 
             # 5. Generate comparative analysis
@@ -663,8 +707,12 @@ class MultiStagePruningExperiment:
         print("📈 Generating comparative analysis...")
 
         try:
-            successful_stages = [s for s in self.results["stage_results"].values() if s["status"] == "success"]
-            
+            successful_stages = [
+                s
+                for s in self.results["stage_results"].values()
+                if s["status"] == "success"
+            ]
+
             if not successful_stages:
                 print("⚠️  No successful stages for comparison")
                 return
@@ -673,52 +721,82 @@ class MultiStagePruningExperiment:
             performance_comparison = {}
             best_stage = None
             best_valid_acc = 0
-            
+
             for stage in successful_stages:
                 stage_name = stage["stage_name"]
-                final_perf = stage["training_results"]["pruned_history"].get("final_performance", {})
-                
+                final_perf = stage["training_results"]["pruned_history"].get(
+                    "final_performance", {}
+                )
+
                 performance_comparison[stage_name] = {
                     "time_window": stage["time_window"]["description"],
                     "train_accuracy": final_perf.get("train_accuracy", 0),
                     "valid_accuracy": final_perf.get("valid_accuracy", 0),
                     "train_loss": final_perf.get("train_loss", 0),
-                    "noise_recall": stage["pruning_analysis"]["noise_detection"]["noise_recall"],
-                    "noise_precision": stage["pruning_analysis"]["noise_detection"]["noise_precision"],
-                    "mean_influence": stage["influence_analysis"]["mean_influence"]
+                    "noise_recall": stage["pruning_analysis"]["noise_detection"][
+                        "noise_recall"
+                    ],
+                    "noise_precision": stage["pruning_analysis"]["noise_detection"][
+                        "noise_precision"
+                    ],
+                    "mean_influence": stage["influence_analysis"]["mean_influence"],
                 }
-                
+
                 # Track best performing stage
                 if final_perf.get("valid_accuracy", 0) > best_valid_acc:
                     best_valid_acc = final_perf.get("valid_accuracy", 0)
                     best_stage = stage_name
 
             # Stage ranking by different criteria
-            stages_by_valid_acc = sorted(successful_stages, 
-                                       key=lambda x: x["training_results"]["pruned_history"].get("final_performance", {}).get("valid_accuracy", 0), 
-                                       reverse=True)
-            
-            stages_by_noise_recall = sorted(successful_stages,
-                                          key=lambda x: x["pruning_analysis"]["noise_detection"]["noise_recall"],
-                                          reverse=True)
+            stages_by_valid_acc = sorted(
+                successful_stages,
+                key=lambda x: x["training_results"]["pruned_history"]
+                .get("final_performance", {})
+                .get("valid_accuracy", 0),
+                reverse=True,
+            )
+
+            stages_by_noise_recall = sorted(
+                successful_stages,
+                key=lambda x: x["pruning_analysis"]["noise_detection"]["noise_recall"],
+                reverse=True,
+            )
 
             self.results["comparative_analysis"] = {
                 "performance_comparison": performance_comparison,
                 "best_stage": best_stage,
                 "best_validation_accuracy": best_valid_acc,
                 "stage_rankings": {
-                    "by_validation_accuracy": [s["stage_name"] for s in stages_by_valid_acc],
-                    "by_noise_recall": [s["stage_name"] for s in stages_by_noise_recall]
+                    "by_validation_accuracy": [
+                        s["stage_name"] for s in stages_by_valid_acc
+                    ],
+                    "by_noise_recall": [
+                        s["stage_name"] for s in stages_by_noise_recall
+                    ],
                 },
                 "summary_statistics": {
                     "total_successful_stages": len(successful_stages),
-                    "mean_validation_accuracy": np.mean([s["training_results"]["pruned_history"].get("final_performance", {}).get("valid_accuracy", 0) 
-                                                        for s in successful_stages]),
-                    "mean_noise_recall": np.mean([s["pruning_analysis"]["noise_detection"]["noise_recall"] 
-                                                 for s in successful_stages]),
-                    "mean_noise_precision": np.mean([s["pruning_analysis"]["noise_detection"]["noise_precision"] 
-                                                    for s in successful_stages])
-                }
+                    "mean_validation_accuracy": np.mean(
+                        [
+                            s["training_results"]["pruned_history"]
+                            .get("final_performance", {})
+                            .get("valid_accuracy", 0)
+                            for s in successful_stages
+                        ]
+                    ),
+                    "mean_noise_recall": np.mean(
+                        [
+                            s["pruning_analysis"]["noise_detection"]["noise_recall"]
+                            for s in successful_stages
+                        ]
+                    ),
+                    "mean_noise_precision": np.mean(
+                        [
+                            s["pruning_analysis"]["noise_detection"]["noise_precision"]
+                            for s in successful_stages
+                        ]
+                    ),
+                },
             }
 
             print("✅ Comparative analysis complete")
@@ -734,11 +812,17 @@ class MultiStagePruningExperiment:
 
         try:
             # Save main results file
-            with open(self.output_dir / "multi_stage_experiment_results.json", "w", encoding="utf-8") as f:
+            with open(
+                self.output_dir / "multi_stage_experiment_results.json",
+                "w",
+                encoding="utf-8",
+            ) as f:
                 json.dump(self.results, f, indent=2, ensure_ascii=False, default=str)
 
             # Save configuration file
-            with open(self.output_dir / "experiment_config.json", "w", encoding="utf-8") as f:
+            with open(
+                self.output_dir / "experiment_config.json", "w", encoding="utf-8"
+            ) as f:
                 json.dump(self.config, f, indent=2, ensure_ascii=False)
 
             print(f"✅ Experiment results saved to: {self.output_dir}")
@@ -756,43 +840,63 @@ class MultiStagePruningExperiment:
 
         # Basic information
         print(f"📁 Results Directory: {self.output_dir}")
-        print(f"⏱️  Total Runtime: {self.results.get('end_time', 0) - self.results.get('start_time', 0):.1f} seconds")
+        print(
+            f"⏱️  Total Runtime: {self.results.get('end_time', 0) - self.results.get('start_time', 0):.1f} seconds"
+        )
         print(f"🎯 Experiment Status: {self.results.get('status', 'unknown').upper()}")
 
         # Data information
         data_stats = self.results.get("data_stats", {})
         if data_stats:
             noise_info = data_stats.get("noise_info", {})
-            print(f"\n📊 DATASET INFORMATION:")
+            print("\n📊 DATASET INFORMATION:")
             print(f"   Dataset: {self.config['dataset_name'].upper()}")
             print(f"   Training Samples: {noise_info.get('total_samples', 'N/A')}")
-            print(f"   Noise Samples: {noise_info.get('noise_count', 'N/A')} ({noise_info.get('noise_rate', 0) * 100:.1f}%)")
+            print(
+                f"   Noise Samples: {noise_info.get('noise_count', 'N/A')} ({noise_info.get('noise_rate', 0) * 100:.1f}%)"
+            )
 
         # Time windows
-        print(f"\n⏰ TIME WINDOWS:")
+        print("\n⏰ TIME WINDOWS:")
         for i, (start, end) in enumerate(self.time_windows, 1):
             end_desc = "T" if end is None else str(end)
             print(f"   Stage {i}: [{start}, {end_desc}]")
 
         # Stage results
-        successful_stages = [s for s in self.results.get("stage_results", {}).values() if s["status"] == "success"]
-        failed_stages = [s for s in self.results.get("stage_results", {}).values() if s["status"] == "failed"]
+        successful_stages = [
+            s
+            for s in self.results.get("stage_results", {}).values()
+            if s["status"] == "success"
+        ]
+        failed_stages = [
+            s
+            for s in self.results.get("stage_results", {}).values()
+            if s["status"] == "failed"
+        ]
 
-        print(f"\n🚀 STAGE RESULTS:")
-        print(f"   Successful Stages: {len(successful_stages)}/{len(self.time_windows)}")
+        print("\n🚀 STAGE RESULTS:")
+        print(
+            f"   Successful Stages: {len(successful_stages)}/{len(self.time_windows)}"
+        )
         print(f"   Failed Stages: {len(failed_stages)}")
 
         if successful_stages:
-            print(f"\n🏆 PERFORMANCE BY STAGE:")
+            print("\n🏆 PERFORMANCE BY STAGE:")
             for stage in successful_stages:
                 stage_name = stage["stage_name"]
                 time_desc = stage["time_window"]["description"]
-                final_perf = stage["training_results"]["pruned_history"].get("final_performance", {})
+                final_perf = stage["training_results"]["pruned_history"].get(
+                    "final_performance", {}
+                )
                 noise_det = stage["pruning_analysis"]["noise_detection"]
 
                 print(f"\n   {stage_name} - Time Window {time_desc}:")
-                print(f"     Training Accuracy: {final_perf.get('train_accuracy', 0):.3f}")
-                print(f"     Validation Accuracy: {final_perf.get('valid_accuracy', 0):.3f}")
+                print(
+                    f"     Training Accuracy: {final_perf.get('train_accuracy', 0):.3f}"
+                )
+                print(
+                    f"     Validation Accuracy: {final_perf.get('valid_accuracy', 0):.3f}"
+                )
                 print(f"     Noise Recall: {noise_det['noise_recall']:.2%}")
                 print(f"     Noise Precision: {noise_det['noise_precision']:.2%}")
 
@@ -800,17 +904,25 @@ class MultiStagePruningExperiment:
         comparative = self.results.get("comparative_analysis", {})
         if comparative:
             print(f"\n🥇 BEST PERFORMING STAGE: {comparative.get('best_stage', 'N/A')}")
-            print(f"   Best Validation Accuracy: {comparative.get('best_validation_accuracy', 0):.3f}")
-            
+            print(
+                f"   Best Validation Accuracy: {comparative.get('best_validation_accuracy', 0):.3f}"
+            )
+
             summary_stats = comparative.get("summary_statistics", {})
-            print(f"\n📈 OVERALL STATISTICS:")
-            print(f"   Mean Validation Accuracy: {summary_stats.get('mean_validation_accuracy', 0):.3f}")
-            print(f"   Mean Noise Recall: {summary_stats.get('mean_noise_recall', 0):.2%}")
-            print(f"   Mean Noise Precision: {summary_stats.get('mean_noise_precision', 0):.2%}")
+            print("\n📈 OVERALL STATISTICS:")
+            print(
+                f"   Mean Validation Accuracy: {summary_stats.get('mean_validation_accuracy', 0):.3f}"
+            )
+            print(
+                f"   Mean Noise Recall: {summary_stats.get('mean_noise_recall', 0):.2%}"
+            )
+            print(
+                f"   Mean Noise Precision: {summary_stats.get('mean_noise_precision', 0):.2%}"
+            )
 
         # Error log
         if self.results.get("error_log"):
-            print(f"\n⚠️  ERROR LOG:")
+            print("\n⚠️  ERROR LOG:")
             for error in self.results["error_log"]:
                 print(f"   • {error}")
 

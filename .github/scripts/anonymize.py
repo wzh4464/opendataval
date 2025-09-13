@@ -1,4 +1,5 @@
 """Script to anonymize research paper given authors/emails"""
+
 import argparse
 import pathlib
 from fileinput import FileInput
