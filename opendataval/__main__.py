@@ -141,7 +141,7 @@ def run(
     test: Annotated[Optional[int], Option(
         help="Number of test data points", prompt=True)] = 25,
 
-    device: Annotated[Optional[str], Option(help="Torch device")] = None,
+    device: Annotated[Optional[str], Option(help="Torch device: cpu | cuda | mps | auto")] = None,
     random_state: Annotated[Optional[int], Option(help="Initial Random State")] = None,
     output_dir: Annotated[Optional[Path], Option(
         "--output", "-o", help="Directory of experiments output",

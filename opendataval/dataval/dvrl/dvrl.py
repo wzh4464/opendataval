@@ -168,7 +168,7 @@ class DVRL(DataEvaluator, ModelMixin):
         optimizer = torch.optim.Adam(self.value_estimator.parameters(), lr=self.lr)
         criterion = DveLoss(threshold=self.threshold)
 
-        gen = torch.Generator(self.device).manual_seed(self.random_state.tomaxint())
+        # Use CPU generator for DataLoader sampling; rely on default RNG on model device
         cpu_gen = torch.Generator("cpu").manual_seed(self.random_state.tomaxint())
 
         data = CatDataset(self.x_train, self.y_train, self.y_pred_diff)
@@ -194,11 +194,11 @@ class DVRL(DataEvaluator, ModelMixin):
             # Generates selection probability
             pred_dataval = self.value_estimator(x_batch_ve, y_batch_ve, y_hat_batch_ve)
 
-            # Samples the selection probability
-            select_prob = torch.bernoulli(pred_dataval, generator=gen)
+            # Samples the selection probability (use device RNG; avoids device-specific Generator requirements)
+            select_prob = torch.bernoulli(pred_dataval)
             if select_prob.sum().item() == 0:  # Exception (select probability is 0)
                 pred_dataval = 0.5 * torch.ones_like(pred_dataval, requires_grad=True)
-                select_prob = torch.bernoulli(pred_dataval, generator=gen)
+                select_prob = torch.bernoulli(pred_dataval)
 
             # Prediction and training
             new_model = self.pred_model.clone()

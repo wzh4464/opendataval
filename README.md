@@ -110,6 +110,21 @@ To run without installing the script:
 python opendataval --file cli.csv -n [job_id] -o [path/to/output/]
 ```
 
+#### Apple Silicon (MPS) support
+- Auto-select best device (CUDA > MPS > CPU): pass `--device auto` (or omit `--device`).
+- Force MPS: pass `--device mps`.
+
+Example:
+
+```
+python -m opendataval run \
+  --dataval LossVal --dataset iris --model ClassifierMLP \
+  --train 50 --valid 25 --test 25 \
+  --device auto
+```
+
+Ensure your PyTorch build has MPS enabled (macOS 12.3+ on Apple Silicon).
+
 <p align="right">(<a href="#readme-top">Back to top</a>)</p>
 
 ### :control_knobs: API

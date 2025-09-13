@@ -12,6 +12,8 @@ import torch
 import tqdm
 from numpy.random import RandomState
 from sklearn.utils import check_random_state
+from typing import Union
+import random
 
 
 def load_mediator_output(filepath: str):
@@ -25,6 +27,58 @@ def set_random_state(random_state: Optional[RandomState] = None) -> RandomState:
     torch.manual_seed(check_random_state(random_state).tomaxint())
     random_state = check_random_state(random_state)
     return random_state
+
+
+def set_random_seed(seed: Optional[int] = None) -> RandomState:
+    """Compatibility wrapper to set global RNG seeds from an integer.
+
+    - Sets Python `random`, NumPy, and PyTorch RNGs.
+    - Returns a `RandomState` initialized from `seed` for further use.
+    """
+    rs = check_random_state(seed)
+    # Python random
+    random.seed(rs.tomaxint())
+    # NumPy
+    np.random.seed(rs.tomaxint() % (2**32 - 1))
+    # PyTorch
+    torch.manual_seed(rs.tomaxint())
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(rs.tomaxint())
+        torch.cuda.manual_seed_all(rs.tomaxint())
+    return rs
+
+
+def get_torch_device(device: Union[str, torch.device, None] = None) -> torch.device:
+    """Resolve a torch device string/object, preferring CUDA, then MPS, then CPU.
+
+    - If `device` is a valid `torch.device`, it is returned as-is.
+    - If `device` is a string (e.g., "cpu", "cuda", "mps", "auto"), resolve it.
+    - If `device` is None or "auto", choose best available: CUDA > MPS > CPU.
+    """
+    if isinstance(device, torch.device):
+        return device
+
+    if isinstance(device, str):
+        dev = device.strip().lower()
+        if dev == "auto" or dev == "best":
+            # fallthrough to auto detection below
+            device = None
+        elif dev in {"cpu", "cuda", "mps"}:
+            return torch.device(dev)
+        else:
+            # Try to construct device from string; fallback to auto
+            try:
+                return torch.device(dev)
+            except Exception:
+                device = None
+
+    # Auto-detect best device
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    # Some PyTorch builds may not have mps backend attribute
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 
 def batched(it, n=1):

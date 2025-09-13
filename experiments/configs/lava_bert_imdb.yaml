@@ -1,0 +1,35 @@
+# LAVA + BERT IMDB情感分析配置
+# 使用: uv run python -m experiments.run_experiment --config experiments/configs/lava_bert_imdb.yaml
+
+dataset:
+  name: "imdb"
+  train_count: 1000
+  valid_count: 200
+  test_count: 200
+  add_noise: null
+
+model:
+  type: "bert"
+  pretrained_model: "distilbert-base-uncased"
+  kwargs:
+    dropout_rate: 0.2
+    num_train_layers: 2
+
+training:
+  epochs: 5
+  batch_size: 16
+  lr: 2e-5
+  save_every: 1
+
+evaluator:
+  name: "lava"
+  kwargs:
+    embedding_mode: "pooled"
+
+experiment:
+  output_dir: "./results/lava_bert_imdb"
+  output_prefix: "lava_bert"
+  device: "auto"
+  seed: 42
+  skip_missing_checkpoints: true
+  verify_telescope: true

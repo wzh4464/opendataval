@@ -1,0 +1,30 @@
+# KNNShapley + BERT IMDB情感分析配置
+# 使用: uv run python -m experiments.run_experiment --config experiments/configs/knnshap_bert_imdb.yaml
+
+dataset:
+  name: "imdb"
+  train_count: 800
+  valid_count: 150
+  test_count: 150
+
+model:
+  type: "bert"
+  pretrained_model: "distilbert-base-uncased"
+
+training:
+  epochs: 3
+  batch_size: 8
+  lr: 2e-5
+  save_every: 1
+
+evaluator:
+  name: "knnshapley"
+  kwargs:
+    k_neighbors: 10
+    batch_size: 32
+
+experiment:
+  output_dir: "./results/knnshap_bert_imdb"
+  output_prefix: "knnshap_bert"
+  device: "auto"
+  seed: 42

@@ -17,6 +17,7 @@ from opendataval.dataloader import DataFetcher, mix_labels
 from opendataval.dataval import DataEvaluator
 from opendataval.experiment.util import filter_kwargs
 from opendataval.metrics import Metrics
+from opendataval.util import get_torch_device
 from opendataval.model import Model, ModelFactory
 
 
@@ -129,7 +130,7 @@ class ExperimentMediator:
         noise_kwargs: Optional[dict[str, Any]] = None,
         random_state: Optional[RandomState] = None,
         model_name: Optional[str] = None,
-        device: torch.device = torch.device("cpu"),
+        device: Union[str, torch.device] = torch.device("cpu"),
         train_kwargs: Optional[dict[str, Any]] = None,
         metric_name: Optional[Union[str, Metrics, Callable]] = None,
         output_dir: Optional[Union[str, pathlib.Path]] = None,
@@ -208,10 +209,13 @@ class ExperimentMediator:
             noise_kwargs=noise_kwargs,
         )
 
+        # Resolve device (accepts str, torch.device, or "auto")
+        resolved_device = get_torch_device(device)
+
         pred_model = ModelFactory(
             model_name=model_name,
             fetcher=fetcher,
-            device=device,
+            device=resolved_device,
         )
 
         # Prints base line performance

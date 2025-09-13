@@ -210,13 +210,15 @@ class DatasetDistance:
         with torch.no_grad():
             loss.debias = False
             loss.potentials = True
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
             F_i, G_j = loss(Z1.to(self.device), Z2.to(self.device))
             pi = [F_i, G_j]
 
         del Z1, Z2
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         return pi
 

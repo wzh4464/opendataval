@@ -1,0 +1,30 @@
+# Influence Functions + MLP 表格数据配置示例
+# 使用: uv run python -m experiments.run_experiment --config experiments/configs/influence_mlp_tabular.yaml
+
+dataset:
+  name: "iris"  # 或其他表格数据集
+  train_count: 100
+  valid_count: 25
+  test_count: 25
+
+model:
+  type: "mlp"
+  kwargs:
+    hidden_dim: 64
+    dropout_rate: 0.1
+
+training:
+  epochs: 10
+  batch_size: 32
+  lr: 1e-3
+  save_every: 2
+
+evaluator:
+  name: "influence"
+  kwargs: {}
+
+experiment:
+  output_dir: "./results/influence_mlp_iris"
+  output_prefix: "influence_mlp"
+  device: "auto"
+  seed: 42
