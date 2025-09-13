@@ -5,7 +5,8 @@
       "Bash(grep:*)",
       "WebSearch",
       "Bash(mkdir:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []

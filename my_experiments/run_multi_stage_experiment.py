@@ -8,6 +8,7 @@ demonstration and testing purposes.
 
 import sys
 import time
+import argparse
 from pathlib import Path
 
 # Add the project root to the Python path
@@ -18,8 +19,14 @@ from my_experiments.multi_stage_pruning_experiment import create_multi_stage_exp
 
 
 def main():
-    """Run multi-stage experiment with demo settings"""
+    """Run multi-stage experiment with configurable settings"""
     
+    parser = argparse.ArgumentParser(description="Run multi-stage TIM experiment")
+    parser.add_argument("--n_tr", type=int, default=1000, help="Number of training samples")
+    parser.add_argument("--n_val", type=int, default=200, help="Number of validation/test samples")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    args = parser.parse_args()
+
     print("🚀 Multi-Stage TIM Influence Data Pruning Experiment")
     print("=" * 80)
     print("This experiment divides training into 5 time windows based on TRAINING STEPS:")
@@ -37,28 +44,33 @@ def main():
     print("4. Compare performance across all stages")
     print("=" * 80)
     
-    # Create experiment with demonstration settings
+    # Create experiment with provided settings
     experiment = create_multi_stage_experiment(
         # Data configuration
         dataset_name="imdb",
-        train_count=1000,    # Smaller for demo
-        valid_count=200,
-        test_count=200,
+        train_count=args.n_tr,
+        valid_count=args.n_val,
+        test_count=args.n_val,
         noise_rate=0.3,      # 30% label noise
         
         # Model configuration
-        model_name="distilbert-base-uncased",
+        pretrained_model_name="distilbert-base-uncased",
         
         # Training configuration
         epochs=10,           # 10 epochs total, 2 epochs per stage
         batch_size=16,
+        learning_rate=2e-5,
         
         # Multi-stage configuration  
         num_stages=5,        # 5 time windows
         
+        # Pruning & relabel configuration
+        prune_ratio=0.1,
+        relabel_ratio=0.3,
+        
         # Experiment configuration
         output_dir="./multi_stage_demo_results",
-        random_state=42,
+        random_state=args.seed,
     )
     
     print(f"\n⚙️  EXPERIMENT CONFIGURATION:")

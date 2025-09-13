@@ -31,6 +31,7 @@ from my_experiments.bert_training_module import create_bert_trainer
 from my_experiments.noise_data_module import create_noise_processor
 from my_experiments.tim_influence_module import create_tim_calculator
 from my_experiments.multi_stage_visualization_module import create_multi_stage_visualizer
+from opendataval.model import BertClassifier
 
 
 class MultiStagePruningExperiment:
@@ -44,11 +45,12 @@ class MultiStagePruningExperiment:
         valid_count: int = 200,
         test_count: int = 200,
         noise_rate: float = 0.3,
-        # Model configuration
-        model_name: str = "distilbert-base-uncased",
+        # BERT Model configuration (using submodule structure)
+        pretrained_model_name: str = "distilbert-base-uncased",
         num_classes: int = 2,
         dropout_rate: float = 0.2,
         num_train_layers: int = 2,
+        max_length: int = 50,
         # Training configuration
         epochs: int = 10,  # More epochs to divide into 5 stages
         batch_size: int = 16,
@@ -59,7 +61,9 @@ class MultiStagePruningExperiment:
         regularization: float = 0.01,
         finite_diff_eps: float = 1e-5,
         # Pruning configuration
-        prune_ratio: float = 0.3,
+        prune_ratio: float = 0.1,  # 10% most harmful samples
+        # Relabel analysis configuration
+        relabel_ratio: float = 0.3,  # 30% relabel analysis
         # Experiment configuration
         random_state: int = 42,
         device: str = "auto",
@@ -122,10 +126,11 @@ class MultiStagePruningExperiment:
             "valid_count": valid_count,
             "test_count": test_count,
             "noise_rate": noise_rate,
-            "model_name": model_name,
+            "pretrained_model_name": pretrained_model_name,
             "num_classes": num_classes,
             "dropout_rate": dropout_rate,
             "num_train_layers": num_train_layers,
+            "max_length": max_length,
             "epochs": epochs,
             "batch_size": batch_size,
             "learning_rate": learning_rate,
@@ -134,6 +139,7 @@ class MultiStagePruningExperiment:
             "regularization": regularization,
             "finite_diff_eps": finite_diff_eps,
             "prune_ratio": prune_ratio,
+            "relabel_ratio": relabel_ratio,
             "random_state": random_state,
             "device": device,
             "output_dir": output_dir,
@@ -250,7 +256,7 @@ class MultiStagePruningExperiment:
 
             # 2. BERT trainer
             self.bert_trainer = create_bert_trainer(
-                model_name=self.config["model_name"],
+                model_name=self.config["pretrained_model_name"],
                 num_classes=self.config["num_classes"],
                 dropout_rate=self.config["dropout_rate"],
                 num_train_layers=self.config["num_train_layers"],
@@ -522,6 +528,153 @@ class MultiStagePruningExperiment:
                 "error": str(e)
             }
 
+    def run_relabel_analysis(self, original_model, original_data: Dict) -> Dict:
+        """
+        运行30% relabel分析，计算每个数据点的影响力
+        
+        Parameters:
+        -----------
+        original_model : BertClassifier
+            原始训练好的模型
+        original_data : Dict
+            原始数据
+            
+        Returns:
+        --------
+        Dict
+            Relabel分析结果
+        """
+        print("🔍 开始30% relabel分析...")
+        
+        try:
+            # 1. 创建TIM计算器
+            tim_calculator = create_tim_calculator(
+                t1=0,
+                t2=None,  # 分析整个训练过程
+                num_epochs=self.config["epochs"],
+                batch_size=self.config["tim_batch_size"],
+                regularization=self.config["regularization"],
+                finite_diff_eps=self.config["finite_diff_eps"],
+                random_state=self.config["random_state"],
+            )
+            
+            # 2. 计算所有数据点的影响力
+            print("📊 计算所有数据点的影响力分数...")
+            influence_scores = tim_calculator.compute_influence(original_model, original_data)
+            
+            # 3. 分析影响力分数
+            noise_indices = self.data_processor.noise_indices
+            influence_analysis = tim_calculator.analyze_influence_scores(
+                influence_scores, original_data["y_train"], noise_indices
+            )
+            
+            # 4. 识别最有害的10%样本
+            num_harmful = int(len(original_data["y_train"]) * self.config["prune_ratio"])
+            harmful_indices = np.argsort(influence_scores)[:num_harmful]  # 最低影响力 = 最有害
+            
+            # 5. 保存relabel分析结果
+            relabel_results = {
+                "influence_scores": influence_scores.tolist(),
+                "influence_analysis": influence_analysis,
+                "harmful_indices": harmful_indices.tolist(),
+                "num_harmful": num_harmful,
+                "harmful_ratio": self.config["prune_ratio"],
+                "mean_influence": float(np.mean(influence_scores)),
+                "std_influence": float(np.std(influence_scores)),
+                "min_influence": float(np.min(influence_scores)),
+                "max_influence": float(np.max(influence_scores)),
+            }
+            
+            print(f"✅ Relabel分析完成")
+            print(f"   总数据点: {len(original_data['y_train'])}")
+            print(f"   最有害样本数: {num_harmful} ({self.config['prune_ratio']*100:.1f}%)")
+            print(f"   影响力范围: [{np.min(influence_scores):.6f}, {np.max(influence_scores):.6f}]")
+            
+            return relabel_results
+            
+        except Exception as e:
+            error_msg = f"Relabel分析失败: {e}"
+            print(f"❌ {error_msg}")
+            self.results["error_log"].append(error_msg)
+            raise
+
+    def train_with_harmful_removal(self, original_data: Dict, harmful_indices: np.ndarray, initial_state: Dict) -> Dict:
+        """
+        去除10%最有害样本后重新训练模型
+        
+        Parameters:
+        -----------
+        original_data : Dict
+            原始数据
+        harmful_indices : np.ndarray
+            最有害样本的索引
+        initial_state : Dict
+            初始模型状态
+            
+        Returns:
+        --------
+        Dict
+            重新训练结果
+        """
+        print("🚀 去除最有害样本后重新训练模型...")
+        
+        try:
+            # 1. 创建清理后的数据
+            clean_indices = np.setdiff1d(np.arange(len(original_data["y_train"])), harmful_indices)
+            
+            cleaned_data = {
+                "x_train": [original_data["x_train"][i] for i in clean_indices],
+                "y_train": original_data["y_train"][clean_indices],
+                "x_valid": original_data["x_valid"],
+                "y_valid": original_data["y_valid"],
+                "x_test": original_data["x_test"],
+                "y_test": original_data["y_test"],
+            }
+            
+            # 2. 创建新模型并加载初始状态
+            cleaned_model = self.bert_trainer.create_model()
+            cleaned_model = self.bert_trainer.load_model_state(cleaned_model, initial_state)
+            
+            # 3. 训练清理后的模型
+            print(f"   清理后训练样本数: {len(cleaned_data['y_train'])}")
+            print(f"   去除样本数: {len(harmful_indices)}")
+            
+            cleaned_history = self.bert_trainer.train_model(
+                model=cleaned_model,
+                data=cleaned_data,
+                epochs=self.config["epochs"],
+                batch_size=self.config["batch_size"],
+                learning_rate=self.config["learning_rate"],
+            )
+            
+            # 4. 保存清理后的模型
+            torch.save(cleaned_model.state_dict(), self.output_dir / "cleaned_model.pt")
+            
+            # 5. 编译结果
+            removal_results = {
+                "cleaned_data_info": {
+                    "original_samples": len(original_data["y_train"]),
+                    "removed_samples": len(harmful_indices),
+                    "remaining_samples": len(clean_indices),
+                    "removal_ratio": len(harmful_indices) / len(original_data["y_train"]),
+                },
+                "training_history": cleaned_history,
+                "model_path": str(self.output_dir / "cleaned_model.pt"),
+                "harmful_indices": harmful_indices.tolist(),
+                "clean_indices": clean_indices.tolist(),
+            }
+            
+            print(f"✅ 有害样本去除训练完成")
+            print(f"   最终验证准确率: {cleaned_history.get('final_performance', {}).get('valid_accuracy', 0):.3f}")
+            
+            return removal_results
+            
+        except Exception as e:
+            error_msg = f"有害样本去除训练失败: {e}"
+            print(f"❌ {error_msg}")
+            self.results["error_log"].append(error_msg)
+            raise
+
     def create_multi_stage_visualizations(self):
         """Create comprehensive visualizations across all stages"""
         if not self.config["save_plots"] or self.visualizer is None:
@@ -533,6 +686,8 @@ class MultiStagePruningExperiment:
         try:
             successful_stages = [s for s in self.results["stage_results"].values() if s["status"] == "success"]
             original_history = self.results.get("original_training", {}).get("history", {})
+            relabel_results = self.results.get("relabel_analysis", {})
+            removal_results = self.results.get("harmful_removal", {})
             
             if not successful_stages:
                 print("⚠️  No successful stages to visualize")
@@ -553,13 +708,22 @@ class MultiStagePruningExperiment:
                 save_name="stage_performance_comparison.png"
             )
             
-            # 3. Training curves comparison
-            self.visualizer.plot_training_curves_comparison(
-                original_history,
-                successful_stages,
-                title="Training Loss Curves: Original vs Multi-Stage Pruned Models",
-                save_name="training_curves_comparison.png"
-            )
+            # 3. Training curves comparison (包括有害样本去除)
+            if removal_results:
+                self.visualizer.plot_training_curves_comparison(
+                    original_history,
+                    successful_stages,
+                    cleaned_history=removal_results.get("training_history", {}),
+                    title="Training Loss Curves: Original vs Multi-Stage vs Harmful Removal",
+                    save_name="training_curves_comparison.png"
+                )
+            else:
+                self.visualizer.plot_training_curves_comparison(
+                    original_history,
+                    successful_stages,
+                    title="Training Loss Curves: Original vs Multi-Stage Pruned Models",
+                    save_name="training_curves_comparison.png"
+                )
             
             # 4. Influence heatmap
             self.visualizer.plot_influence_heatmap(
@@ -618,7 +782,25 @@ class MultiStagePruningExperiment:
             # 3. Train original model
             original_model, initial_state, original_history = self.train_original_model(noisy_data)
 
-            # 4. Run experiments for each stage
+            # 4. Run relabel analysis (30% analysis)
+            print("\n" + "="*60)
+            print("🔍 PHASE 1: 30% RELABEL ANALYSIS")
+            print("="*60)
+            relabel_results = self.run_relabel_analysis(original_model, noisy_data)
+            self.results["relabel_analysis"] = relabel_results
+
+            # 5. Run harmful sample removal (10% most harmful)
+            print("\n" + "="*60)
+            print("🚀 PHASE 2: 10% HARMFUL SAMPLE REMOVAL")
+            print("="*60)
+            harmful_indices = np.array(relabel_results["harmful_indices"])
+            removal_results = self.train_with_harmful_removal(noisy_data, harmful_indices, initial_state)
+            self.results["harmful_removal"] = removal_results
+
+            # 6. Run experiments for each stage
+            print("\n" + "="*60)
+            print("🔬 PHASE 3: MULTI-STAGE EXPERIMENTS")
+            print("="*60)
             self.results["stage_results"] = {}
             
             for stage_num, time_window in enumerate(self.time_windows, 1):
@@ -632,13 +814,13 @@ class MultiStagePruningExperiment:
                 
                 self.results["stage_results"][f"stage_{stage_num}"] = stage_results
 
-            # 5. Generate comparative analysis
+            # 7. Generate comparative analysis
             self.generate_comparative_analysis()
 
-            # 6. Create multi-stage visualizations
+            # 8. Create multi-stage visualizations
             self.create_multi_stage_visualizations()
 
-            # 7. Save experiment results
+            # 9. Save experiment results
             self.save_experiment_results()
 
             self.results["status"] = "success"
@@ -796,6 +978,27 @@ class MultiStagePruningExperiment:
                 print(f"     Noise Recall: {noise_det['noise_recall']:.2%}")
                 print(f"     Noise Precision: {noise_det['noise_precision']:.2%}")
 
+        # Relabel analysis results
+        relabel_results = self.results.get("relabel_analysis", {})
+        if relabel_results:
+            print(f"\n🔍 RELABEL ANALYSIS RESULTS:")
+            print(f"   总数据点: {len(relabel_results.get('influence_scores', []))}")
+            print(f"   最有害样本数: {relabel_results.get('num_harmful', 0)} ({relabel_results.get('harmful_ratio', 0)*100:.1f}%)")
+            print(f"   平均影响力: {relabel_results.get('mean_influence', 0):.6f}")
+            print(f"   影响力标准差: {relabel_results.get('std_influence', 0):.6f}")
+
+        # Harmful removal results
+        removal_results = self.results.get("harmful_removal", {})
+        if removal_results:
+            cleaned_info = removal_results.get("cleaned_data_info", {})
+            final_perf = removal_results.get("training_history", {}).get("final_performance", {})
+            print(f"\n🚀 HARMFUL SAMPLE REMOVAL RESULTS:")
+            print(f"   原始样本数: {cleaned_info.get('original_samples', 0)}")
+            print(f"   去除样本数: {cleaned_info.get('removed_samples', 0)}")
+            print(f"   剩余样本数: {cleaned_info.get('remaining_samples', 0)}")
+            print(f"   去除比例: {cleaned_info.get('removal_ratio', 0)*100:.1f}%")
+            print(f"   最终验证准确率: {final_perf.get('valid_accuracy', 0):.3f}")
+
         # Best performing stage
         comparative = self.results.get("comparative_analysis", {})
         if comparative:
@@ -824,13 +1027,22 @@ def create_multi_stage_experiment(
     valid_count: int = 400,
     test_count: int = 400,
     noise_rate: float = 0.3,
-    # Model configuration
-    model_name: str = "distilbert-base-uncased",
+    # BERT Model configuration (using submodule structure)
+    pretrained_model_name: str = "distilbert-base-uncased",
+    num_classes: int = 2,
+    dropout_rate: float = 0.2,
+    num_train_layers: int = 2,
+    max_length: int = 50,
     # Training configuration
     epochs: int = 10,
     batch_size: int = 32,
+    learning_rate: float = 2e-5,
     # Multi-stage configuration
     num_stages: int = 5,
+    # Pruning configuration
+    prune_ratio: float = 0.1,  # 10% most harmful samples
+    # Relabel analysis configuration
+    relabel_ratio: float = 0.3,  # 30% relabel analysis
     # Experiment configuration
     output_dir: str = "./multi_stage_results",
     random_state: int = 42,
@@ -874,10 +1086,17 @@ def create_multi_stage_experiment(
         valid_count=valid_count,
         test_count=test_count,
         noise_rate=noise_rate,
-        model_name=model_name,
+        pretrained_model_name=pretrained_model_name,
+        num_classes=num_classes,
+        dropout_rate=dropout_rate,
+        num_train_layers=num_train_layers,
+        max_length=max_length,
         epochs=epochs,
         batch_size=batch_size,
+        learning_rate=learning_rate,
         num_stages=num_stages,
+        prune_ratio=prune_ratio,
+        relabel_ratio=relabel_ratio,
         output_dir=output_dir,
         random_state=random_state,
     )
