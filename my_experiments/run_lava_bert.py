@@ -30,8 +30,10 @@ from opendataval.dataval.lava import LavaEvaluator
 from opendataval.model import BertClassifier
 
 
-def select_device(pref: str = "auto") -> torch.device:
+def select_device(pref: str = "auto", gpu: Optional[int] = None) -> torch.device:
     if pref == "cuda" and torch.cuda.is_available():
+        if gpu is not None and 0 <= gpu < torch.cuda.device_count():
+            return torch.device(f"cuda:{gpu}")
         return torch.device("cuda")
     if pref == "mps" and torch.backends.mps.is_available():
         return torch.device("mps")
@@ -39,6 +41,8 @@ def select_device(pref: str = "auto") -> torch.device:
         return torch.device("cpu")
     # auto
     if torch.cuda.is_available():
+        if gpu is not None and 0 <= gpu < torch.cuda.device_count():
+            return torch.device(f"cuda:{gpu}")
         return torch.device("cuda")
     if torch.backends.mps.is_available():
         return torch.device("mps")
@@ -221,6 +225,12 @@ def main():
         default="auto",
         help="device preference",
     )
+    parser.add_argument(
+        "--gpu",
+        type=int,
+        default=None,
+        help="GPU id to use when CUDA is available (e.g., --gpu 2)",
+    )
     parser.add_argument("--seed", type=int, default=42)
 
     # 输出
@@ -237,7 +247,14 @@ def main():
 
     args = parser.parse_args()
 
-    device = select_device(args.device)
+    device = select_device(args.device, args.gpu)
+    # If CUDA with explicit GPU id, set it
+    if device.type == "cuda" and args.gpu is not None:
+        try:
+            torch.cuda.set_device(device)
+        except Exception:
+            # Fallback: ignore if cannot set
+            pass
     set_seed(args.seed)
 
     out_dir = Path(args.output_dir)
@@ -255,7 +272,8 @@ def main():
     print(f"  lr, batch_size  : {args.lr}, {args.batch_size}")
     print(f"  pretrained      : {args.pretrained_model}")
     print(f"  embedding_mode  : {args.embedding_mode}")
-    print(f"  device, seed    : {device}, {args.seed}")
+    gpu_descr = f", gpu={args.gpu}" if (device.type == "cuda" and args.gpu is not None) else ""
+    print(f"  device, seed    : {device}{gpu_descr}, {args.seed}")
     print(f"  output_dir      : {out_dir}")
 
     all_stats = {}
