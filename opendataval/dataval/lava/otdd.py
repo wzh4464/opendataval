@@ -390,11 +390,9 @@ def pwdist_exact(
         ## If tasks are asymmetric, need n1 x n2 comparisons
         pairs = list(itertools.product(range(n1), range(n2)))
 
-    # Keep 'euclidean' as string so GeomLoss can select the appropriate backend.
-    # Using a Python function here may trigger KeOps string concatenation issues
-    # in the 'online' backend (see TypeError when cost is a callable).
+    # Use tensorized backend and Python callables for costs to avoid KeOps string issues.
     if cost_function == "euclidean":
-        cost_function = "euclidean"
+        cost_function = cost_routines[p]
 
     distance = geomloss.SamplesLoss(
         loss=loss,
@@ -402,6 +400,7 @@ def pwdist_exact(
         cost=cost_function,
         debias=debias,
         blur=entreg ** (1 / p),
+        backend="tensorized",
     )
 
     D = torch.zeros((n1, n2), device=device, dtype=X1.dtype)
