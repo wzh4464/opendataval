@@ -390,8 +390,11 @@ def pwdist_exact(
         ## If tasks are asymmetric, need n1 x n2 comparisons
         pairs = list(itertools.product(range(n1), range(n2)))
 
+    # Keep 'euclidean' as string so GeomLoss can select the appropriate backend.
+    # Using a Python function here may trigger KeOps string concatenation issues
+    # in the 'online' backend (see TypeError when cost is a callable).
     if cost_function == "euclidean":
-        cost_function = cost_routines[p]
+        cost_function = "euclidean"
 
     distance = geomloss.SamplesLoss(
         loss=loss,
