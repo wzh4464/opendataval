@@ -155,11 +155,15 @@ def run_stage_lava(
             lr=finetune_lr,
         )
 
-    # 包装用于 LAVA 的嵌入模型
+    # 先离线生成数值嵌入，避免 LAVA 内部使用 FeatureCost（与文本不兼容）
     emb_model = BertEmbeddingWrapper(bert, mode=embedding_mode)
+    with torch.no_grad():
+        x_train_emb = emb_model.predict(x_train).detach()
+        x_valid_emb = emb_model.predict(x_valid).detach()
 
-    lava = LavaEvaluator(device=device, embedding_model=emb_model, random_state=seed)
-    lava.input_data(x_train, y_train, x_valid, y_valid)
+    # 直接将嵌入传入 LAVA，保持 feature_cost=euclidean
+    lava = LavaEvaluator(device=device, embedding_model=None, random_state=seed)
+    lava.input_data(x_train_emb, y_train, x_valid_emb, y_valid)
     lava.train_data_values()
     dv = lava.evaluate_data_values()
     return dv
